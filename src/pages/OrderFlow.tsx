@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Package, MapPin, CheckCircle2, ChevronRight, Calculator, Truck, LogIn, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Package, MapPin, CheckCircle2, ChevronRight, Calculator, Truck, LogOut, ArrowLeft, Home, Globe } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "../lib/i18n";
 
 interface Region {
@@ -37,6 +37,7 @@ interface DestinationItem {
 }
 
 export default function OrderFlow() {
+  const navigate = useNavigate();
   const { t, lang, isRtl } = useTranslation();
   const [step, setStep] = useState(1);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -85,6 +86,11 @@ export default function OrderFlow() {
       }
     });
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
   const saveRecentAddress = (addr: Address) => {
     if (!addr.line || !addr.name || !addr.phone) return;
@@ -168,25 +174,22 @@ export default function OrderFlow() {
   return (
     <div className={`flex flex-col w-full h-full overflow-auto bg-[#F1F5F9] ${isRtl ? 'font-sans' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 w-full shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-2 text-blue-600 mb-1">
-             <h2 className="font-bold tracking-tight text-xl text-slate-900">ShipControl</h2>
+      <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title={t('dashboard')}>
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <nav className="flex items-center gap-4">
-             <Link to="/admin" className="text-sm font-semibold hover:text-blue-600 transition-colors">
-              {t('analytics')}
-            </Link>
-             <Link to="/" className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
-              <ArrowLeft className={`h-4 w-4 ${isRtl ? 'rotate-180' : ''}`} />
-              <span className="hidden sm:inline">{t('back_to_home')}</span>
-            </Link>
-            <div className="w-px h-4 bg-slate-300"></div>
-            <Link to="/login" className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
-              <LogIn className="h-4 w-4" />
-              <span>{t('enterprise_login')}</span>
-            </Link>
-          </nav>
+          <div className="h-4 w-[1px] bg-slate-200 mx-2 hidden sm:block"></div>
+          <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">ShipControl</h1>
+        </div>
+        <div className="flex items-center gap-2">
+           <button 
+             onClick={handleLogout}
+             className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+             title={t('logout')}
+           >
+             <LogOut className="h-5 w-5" />
+           </button>
         </div>
       </header>
 
@@ -437,7 +440,7 @@ export default function OrderFlow() {
               ) : (
                 <div className="space-y-4">
                   {quotes.map((q, i) => (
-                    <div key={i} className="border border-slate-200 p-4 rounded-xl flex flex-col md:items-center md:flex-row justify-between hover:border-blue-500 hover:shadow-md transition-all cursor-pointer bg-white group" onClick={() => setStep(3)}>
+                    <div key={i} className="border border-slate-200 p-4 rounded-xl flex flex-col md:items-center md:flex-row justify-between hover:border-blue-500 hover:shadow-md transition-all bg-white group">
                       <div className="flex items-center gap-4 mb-4 md:mb-0">
                         <div className="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                           <Truck className="h-5 w-5" />
@@ -452,7 +455,41 @@ export default function OrderFlow() {
                           <div className="text-2xl font-bold text-blue-600">${q.total.toFixed(2)}</div>
                           <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{t('dynamic_route')}</div>
                         </div>
-                        <ChevronRight className={`h-5 w-5 text-slate-300 group-hover:text-blue-500 ${isRtl ? 'rotate-180' : ''}`} />
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const token = localStorage.getItem("token");
+                            if (!token) {
+                              alert("Please login to book an order");
+                              navigate("/login");
+                              return;
+                            }
+                            try {
+                              const res = await fetch("/api/orders", {
+                                method: "POST",
+                                headers: { 
+                                  "Content-Type": "application/json",
+                                  "Authorization": `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                  fromRegionId,
+                                  toRegionId: q.matrix.to_region_id,
+                                  methodId: q.method.id,
+                                  totalCost: q.total
+                                })
+                              });
+                              if (res.ok) {
+                                alert("Order booked successfully and ready for assignment!");
+                                navigate("/profile/orders");
+                              }
+                            } catch (error) {
+                              console.error(error);
+                            }
+                          }}
+                          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-all active:scale-95 shadow-sm shadow-blue-200"
+                        >
+                          Book Now
+                        </button>
                       </div>
                     </div>
                   ))}

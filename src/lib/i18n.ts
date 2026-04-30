@@ -104,7 +104,17 @@ export const translations = {
     business_panel: "لوحة الأعمال",
     current_session: "الجلسة الحالية",
     menu: "القائمة",
-    user_label: "مستخدم"
+    user_label: "مستخدم",
+    total_cost: "التكلفة الإجمالية",
+    date: "التاريخ",
+    assign_provider: "تعيين المزود",
+    admin_panel: "لوحة المسؤول",
+    profile_page: "الصفحة الشخصية",
+    general_settings: "الإعدادات العامة",
+    provider_settings: "إعدادات المزود",
+    business_settings: "إعدادات العمل",
+    channels: "القنوات",
+    roles: "الأدوار"
   },
   en: {
     dashboard: "Dashboard",
@@ -210,7 +220,17 @@ export const translations = {
     business_panel: "Business Panel",
     current_session: "Current Session",
     menu: "Menu",
-    user_label: "User"
+    user_label: "User",
+    total_cost: "Total Cost",
+    date: "Date",
+    assign_provider: "Assign Provider",
+    admin_panel: "Admin Panel",
+    profile_page: "Profile",
+    general_settings: "General Settings",
+    provider_settings: "Provider Settings",
+    business_settings: "Business Settings",
+    channels: "Channels",
+    roles: "Roles"
   }
 };
 

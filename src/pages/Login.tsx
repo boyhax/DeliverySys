@@ -1,12 +1,21 @@
-import React, { useState } from "react";
-import { LogIn, ArrowLeft } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { LogIn, ArrowLeft, Home } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const next = searchParams.get("next") || "/";
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate(next === "/" ? "/dashboard" : next);
+    }
+  }, [navigate, next]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +30,7 @@ export default function Login() {
       if (data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("userEmail", email);
-        navigate("/dashboard");
+        navigate(next);
       }
     } catch (err) {
       console.error(err);
@@ -35,16 +44,17 @@ export default function Login() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 w-full shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-2 text-blue-600 mb-1">
-             <h2 className="font-bold tracking-tight text-xl text-slate-900">ShipControl</h2>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+              <Home className="h-5 w-5" />
+            </Link>
+            <Link to="/" className="flex items-center gap-2 text-blue-600 mb-1">
+               <h2 className="font-bold tracking-tight text-xl text-slate-900">ShipControl</h2>
+            </Link>
+          </div>
           <nav className="flex items-center gap-4">
             <Link to="/admin" className="text-sm font-semibold hover:text-blue-600 transition-colors">
               Admin
-            </Link>
-            <Link to="/" className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to Home</span>
             </Link>
           </nav>
         </div>
@@ -121,6 +131,34 @@ export default function Login() {
               </button>
             </div>
           </form>
+
+          {/* Demo Helpers */}
+          <div className="mt-8 pt-6 border-t border-slate-100">
+            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-center mb-4">Demo Accounts</p>
+            <div className="grid grid-cols-1 gap-2">
+              <button 
+                onClick={() => { setEmail("admin@admin.com"); setPassword("admin"); }}
+                className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
+              >
+                <span>Admin</span>
+                <span className="text-[10px] font-medium opacity-60">admin@admin.com</span>
+              </button>
+              <button 
+                onClick={() => { setEmail("user@admin.com"); setPassword("user"); }}
+                className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
+              >
+                <span>User</span>
+                <span className="text-[10px] font-medium opacity-60">user@admin.com</span>
+              </button>
+              <button 
+                onClick={() => { setEmail("provider@admin.com"); setPassword("provider"); }}
+                className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
+              >
+                <span>Provider</span>
+                <span className="text-[10px] font-medium opacity-60">provider@admin.com</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

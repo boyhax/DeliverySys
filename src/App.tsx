@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import OrderFlow from "./pages/OrderFlow";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/order" element={<OrderFlow />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/profile/*" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </div>

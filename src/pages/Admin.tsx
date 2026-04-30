@@ -4,16 +4,18 @@ import {
   Package, Truck, Globe, Settings, LogOut, 
   Plus, Layers, MapPin, Activity, ShieldCheck,
   Menu, X, ChevronRight, ArrowLeft, BarChart3, Users as UsersIcon, ListOrdered,
-  Search, Filter, MoreVertical, ExternalLink
+  Search, Filter, MoreVertical, ExternalLink, User, Shield, Home, MessageSquare
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Card } from "../components/Card";
+import { OrderList } from "../components/OrderList";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import { useTranslation, Language } from "../lib/i18n";
 
-type MainTab = "analytics" | "users" | "orders" | "delivery" | "settings";
+type MainTab = "analytics" | "users" | "orders" | "delivery" | "channels" | "roles" | "settings";
 type DeliverySubTab = "methods" | "regions" | "matrix" | "providers" | "eligibility";
 
 export default function Admin() {
@@ -56,20 +58,23 @@ export default function Admin() {
       const token = localStorage.getItem("token");
       const headers = { "Authorization": `Bearer ${token}` };
       try {
-        const [methods, regions, matrix, providers, classes] = await Promise.all([
+        const [methods, regions, matrix, providers, classes, roles, users, channels] = await Promise.all([
           fetch("/api/admin/methods", { headers }).then(r => r.json()),
           fetch("/api/admin/regions", { headers }).then(r => r.json()),
           fetch("/api/admin/matrix", { headers }).then(r => r.json()),
           fetch("/api/admin/providers", { headers }).then(r => r.json()),
           fetch("/api/classes").then(r => r.json()),
+          fetch("/api/admin/roles", { headers }).then(r => r.json()),
+          fetch("/api/admin/users", { headers }).then(r => r.json()),
+          fetch("/api/admin/channels", { headers }).then(r => r.json()),
         ]);
-        setMetadata({ methods, regions, matrix, providers, classes });
+        setMetadata({ methods, regions, matrix, providers, classes, roles, users, channels });
       } catch (err) {
         console.error("Metadata fetch error:", err);
       }
     };
-    if (isModalOpen) fetchMetadata();
-  }, [isModalOpen]);
+    if (isModalOpen || activeTab === 'channels') fetchMetadata();
+  }, [isModalOpen, activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -97,13 +102,18 @@ export default function Admin() {
 
   const handleOpenModal = (item: any = null) => {
     setEditingItem(item);
-    setFormData(item || {});
+    if (item && item.role) {
+      const currentRole = metadata.roles?.find((r: any) => r.name === item.role);
+      setFormData({ ...item, roleId: currentRole?.id });
+    } else {
+      setFormData(item || {});
+    }
     setCurrentStep(1);
     setIsModalOpen(true);
   };
 
   const getStepsForType = (t: string) => {
-    if (t === "methods" || t === "matrix" || t === "users" || t === "orders" || t === "regions" || t === "providers") return 3;
+    if (t === "methods" || t === "matrix" || t === "users" || t === "orders" || t === "regions" || t === "providers" || t === "channels" || t === "roles") return 2;
     return 1;
   };
 
@@ -170,11 +180,14 @@ export default function Admin() {
   };
 
   const mainNavItems = [
-    { id: "analytics", label: t('analytics'), icon: BarChart3 },
-    { id: "users", label: t('users'), icon: UsersIcon },
-    { id: "orders", label: t('orders'), icon: ListOrdered },
-    { id: "delivery", label: t('delivery'), icon: Truck },
-    { id: "settings", label: t('settings'), icon: Settings },
+    { id: "dashboard", label: t('orders'), icon: Package, link: "/dashboard" },
+    { id: "profile", label: t('profile_page'), icon: User, link: "/profile" },
+    { id: "analytics", label: t('analytics'), icon: BarChart3, tab: "analytics" },
+    { id: "users", label: t('users'), icon: UsersIcon, tab: "users" },
+    { id: "delivery", label: t('delivery'), icon: Truck, tab: "delivery" },
+    { id: "channels", label: t('channels') || 'Channels', icon: MessageSquare, tab: "channels" },
+    { id: "roles", label: t('roles') || 'Roles', icon: Shield, tab: "roles" },
+    { id: "settings", label: t('settings'), icon: Settings, tab: "settings" },
   ];
 
   const deliveryNavItems = [
@@ -467,44 +480,51 @@ export default function Admin() {
             {type === "providers" && (
               <>
                 {currentStep === 1 && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Provider Name</label>
-                      <input required value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
+                      <input required value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" placeholder="e.g. Al-Dhahiri Logistics" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Provider Type</label>
+                      <select required value={formData.type || ''} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                        <option value="">Select Type</option>
+                        <option value="freelancer">Freelancer</option>
+                        <option value="company">Company</option>
+                        <option value="hired driver">Hired Driver</option>
+                      </select>
                     </div>
                   </div>
                 )}
                 {currentStep === 2 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</label>
-                      <select required value={formData.type || ''} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
-                        <option value="air">Air Freight</option>
-                        <option value="sea">Maritime</option>
-                        <option value="land">Ground Transport</option>
-                      </select>
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-2">
+                       <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mb-1 italic">Contact Information</p>
+                       <p className="text-xs text-blue-500/80 leading-relaxed font-medium">Ensure these details are accurate for automated dispatches and alerts.</p>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</label>
-                      <select required value={formData.status || ''} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
-                        <option value="active">Active System</option>
-                        <option value="suspended">Suspended Node</option>
-                      </select>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Phone Number</label>
+                      <input required value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="+968 XXXX XXXX" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Email Address</label>
+                      <input type="email" required value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="contact@provider.com" />
                     </div>
                   </div>
                 )}
                 {currentStep === 3 && (
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Provider Metas</label>
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase">Arabic Title</label>
-                        <input placeholder="العنوان بالعربية" value={formData.metas?.['ar:title'] || ''} onChange={e => handleMetaChange('ar:title', e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase">Contact Person</label>
-                        <input placeholder="Contact Person" value={formData.metas?.contact || ''} onChange={e => handleMetaChange('contact', e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                      </div>
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operational Status</label>
+                      <select required value={formData.status || ''} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                        <option value="active">Active Entry</option>
+                        <option value="suspended">Suspended Entry</option>
+                        <option value="pending">Vetting Required</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Base Performance Score (0-5)</label>
+                      <input type="number" step="0.1" min="0" max="5" value={formData.performance_score || ''} onChange={e => setFormData({...formData, performance_score: parseFloat(e.target.value)})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" />
                     </div>
                   </div>
                 )}
@@ -557,12 +577,13 @@ export default function Admin() {
                 {currentStep === 2 && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
+                      <div className="space-y-1 text-right" dir={isRtl ? 'rtl' : 'ltr'}>
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">System Role</label>
-                        <select required value={formData.role || ''} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
-                          <option value="admin">Administrator</option>
-                          <option value="manager">Operations Mgr</option>
-                          <option value="client">Client Portal</option>
+                        <select required value={formData.roleId || ''} onChange={e => setFormData({...formData, roleId: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="">Select Role</option>
+                          {metadata.roles?.map((r: any) => (
+                            <option key={r.id} value={r.id}>{r.name.toUpperCase()}</option>
+                          ))}
                         </select>
                       </div>
                       <div className="space-y-1">
@@ -572,6 +593,130 @@ export default function Admin() {
                           <option value="inactive">Restricted</option>
                         </select>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Channels Form */}
+            {type === "channels" && (
+              <>
+                {currentStep === 1 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Channel Name</label>
+                      <input required value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold" placeholder="e.g. Operations Alerts" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Topic ARN / Identifier</label>
+                      <input required value={formData.topic || ''} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-mono" placeholder="topics/general/alerts" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Channel Type</label>
+                        <select required value={formData.type || ''} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="sms">SMS Protocol</option>
+                          <option value="email">Email System</option>
+                          <option value="fcm">FCM (Mobile)</option>
+                          <option value="chat">Internal Chat</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</label>
+                        <select required value={formData.status || ''} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="active">Active</option>
+                          <option value="suspended">Suspended</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {currentStep === 2 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-2">
+                       <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mb-1 italic">Channel Subscribers</p>
+                       <p className="text-xs text-blue-500/80 leading-relaxed font-medium">Select users to subscribe to this automated messaging bridge.</p>
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2">
+                      {metadata.users?.map((u: any) => (
+                        <div key={u.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">{u.name}</p>
+                            <p className="text-[9px] text-slate-400 font-medium">{u.email}</p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={async () => {
+                              const token = localStorage.getItem("token");
+                              await fetch("/api/admin/subscriptions", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                                body: JSON.stringify({ channel_id: formData.id, user_id: u.id })
+                              });
+                              // In a real app we'd refresh local state
+                              alert(`Subscribed ${u.name}`);
+                            }}
+                            className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[9px] font-bold uppercase text-blue-600 hover:bg-blue-50 transition-all"
+                          >
+                            Subscribe
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Roles Form */}
+            {type === "roles" && (
+              <>
+                {currentStep === 1 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-1 text-right" dir={isRtl ? 'rtl' : 'ltr'}>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Role Identity</label>
+                      <input required value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="e.g. supervisor" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</label>
+                      <textarea value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium h-24" placeholder="Describe the permissions level..." />
+                    </div>
+                  </div>
+                )}
+                {currentStep === 2 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-2">
+                       <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mb-1 italic">Permissions Matrix</p>
+                       <p className="text-xs text-amber-500/80 leading-relaxed font-medium">Define wildcard patterns for this role (e.g. orders:read, delivery:*).</p>
+                    </div>
+                    <div className="space-y-3">
+                       <div className="flex gap-2">
+                         <input id="new-perm" type="text" placeholder="resource:action" className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none" />
+                         <button 
+                           type="button"
+                           onClick={() => {
+                             const el = document.getElementById('new-perm') as HTMLInputElement;
+                             if (el.value) {
+                               setFormData({...formData, permissions: [...(formData.permissions || []), el.value]});
+                               el.value = '';
+                             }
+                           }}
+                           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold"
+                         >
+                           Add
+                         </button>
+                       </div>
+                       <div className="flex flex-wrap gap-2">
+                         {(formData.permissions || []).map((p: string, i: number) => (
+                           <span key={i} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-mono flex items-center gap-1">
+                             {p}
+                             <button type="button" onClick={() => setFormData({...formData, permissions: formData.permissions.filter((_: any, idx: number) => idx !== i)})} className="hover:text-red-500">
+                               <X className="h-3 w-3" />
+                             </button>
+                           </span>
+                         ))}
+                       </div>
                     </div>
                   </div>
                 )}
@@ -683,143 +828,164 @@ export default function Admin() {
   const renderCards = (tab: string, items: any) => {
     if (!Array.isArray(items)) return <div className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">No data available for this node</div>;
     
+    if (tab === "orders") {
+      return (
+        <OrderList 
+          orders={items} 
+          role="admin" 
+          providers={metadata.providers} 
+          onAssign={async (orderId, providerId) => {
+            const token = localStorage.getItem("token");
+            await fetch("/api/assign-order", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({ orderId, providerId })
+            });
+            fetchData();
+          }}
+        />
+      );
+    }
+
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map((item: any, idx: number) => (
-          <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                {tab === "methods" && item.metas?.image ? (
-                  <img src={item.metas.image} alt="" className="h-10 w-10 rounded-xl object-cover border border-slate-100" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-                    {tab === "users" ? <UsersIcon className="h-5 w-5" /> : 
-                     tab === "orders" ? <Package className="h-5 w-5" /> :
-                     tab === "methods" ? <Layers className="h-5 w-5" /> :
-                     tab === "regions" ? <Globe className="h-5 w-5" /> :
-                     tab === "providers" ? <ShieldCheck className="h-5 w-5" /> :
-                     <Activity className="h-5 w-5" />}
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold text-slate-900 line-clamp-1">
-                    {lang === 'ar' && item.metas?.['ar:title'] ? item.metas['ar:title'] : (item.name || item.tracking_id)}
-                  </h3>
-                  <p className="text-[10px] font-mono text-slate-400 uppercase tracking-tighter">#{item.id.substring(0, 8)}</p>
+        {items.map((item: any, idx: number) => {
+          const title = lang === 'ar' && item.metas?.['ar:title'] ? item.metas['ar:title'] : (item.name || item.tracking_id);
+          const icon = tab === "users" ? <UsersIcon className="h-5 w-5" /> : 
+                       tab === "methods" ? <Layers className="h-5 w-5" /> :
+                       tab === "regions" ? <Globe className="h-5 w-5" /> :
+                       tab === "providers" ? <ShieldCheck className="h-5 w-5" /> :
+                       tab === "channels" ? <MessageSquare className="h-5 w-5" /> :
+                       tab === "roles" ? <Shield className="h-5 w-5" /> :
+                       <Activity className="h-5 w-5" />;
+
+          return (
+            <Card 
+              key={idx}
+              title={title}
+              subtitle={`#${item.id.substring(0, 8)}`}
+              icon={tab === "methods" && item.metas?.image ? <img src={item.metas.image} alt="" className="h-10 w-10 rounded-xl object-cover border border-slate-100" referrerPolicy="no-referrer" /> : icon}
+              headerAction={
+                <div className="flex items-center gap-1">
+                  <button onClick={() => handleOpenModal(item)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                    <Settings className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => handleOpenModal(item)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                  <Settings className="h-3.5 w-3.5" />
-                </button>
-                <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
+              }
+            >
+              <div className="space-y-3">
+                {tab === "users" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Email</span>
+                      <span className="text-slate-700 font-semibold">{item.email}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Role</span>
+                      <span className="text-slate-700 font-semibold capitalize bg-slate-100 px-1.5 py-0.5 rounded">{item.role}</span>
+                    </div>
+                  </>
+                )}
 
-            <div className="space-y-3">
-              {tab === "users" && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Email</span>
-                    <span className="text-slate-700 font-semibold">{item.email}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Role</span>
-                    <span className="text-slate-700 font-semibold capitalize bg-slate-100 px-1.5 py-0.5 rounded">{item.role}</span>
-                  </div>
-                </>
-              )}
+                {tab === "methods" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Class</span>
+                      <span className="text-slate-700 font-semibold">{item.shipping_class}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                        <p className="text-[8px] text-slate-400 uppercase font-black">Base</p>
+                        <p className="text-[10px] font-bold text-slate-900">${item.base_cost}</p>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                        <p className="text-[8px] text-slate-400 uppercase font-black">/KG</p>
+                        <p className="text-[10px] font-bold text-slate-900">${item.cost_per_kg}</p>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-lg text-center">
+                        <p className="text-[8px] text-slate-400 uppercase font-black">/M2</p>
+                        <p className="text-[10px] font-bold text-slate-900">${item.cost_per_m2}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
 
-              {tab === "orders" && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">{t('destination')}</span>
-                    <span className="text-slate-700 font-semibold truncate max-w-[150px]">{item.destination}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">{t('status')}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                      item.status === 'complete' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                      item.status === 'canceled' ? 'bg-red-50 text-red-600 border-red-100' :
-                      'bg-blue-50 text-blue-600 border-blue-100'
-                    }`}>
-                      {item.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-50 mt-2">
-                    <span className="text-[14px] font-black text-slate-900">${(item.cost || 0).toFixed(2)}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                        item.payment_status === 'complete' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'
+                {tab === "regions" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Country Code</span>
+                      <span className="text-slate-700 font-bold tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{item.country_code}</span>
+                    </div>
+                    {item.image_url && (
+                      <img src={item.image_url} alt="" className="w-full h-24 object-cover rounded-xl mt-2 border border-slate-100" referrerPolicy="no-referrer" />
+                    )}
+                  </>
+                )}
+
+                {tab === "providers" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Type</span>
+                      <span className="text-slate-700 font-bold capitalize bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg">{item.type}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Contact</span>
+                      <span className="text-slate-700 font-semibold">{item.phone}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Status</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        item.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'
                       }`}>
-                        {item.payment_status || 'pending'}
-                    </span>
-                  </div>
-                </>
-              )}
-
-              {tab === "methods" && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Class</span>
-                    <span className="text-slate-700 font-semibold">{item.shipping_class}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 pt-2">
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <p className="text-[8px] text-slate-400 uppercase font-black">Base</p>
-                      <p className="text-[10px] font-bold text-slate-900">${item.base_cost}</p>
+                        {item.status}
+                      </span>
                     </div>
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <p className="text-[8px] text-slate-400 uppercase font-black">/KG</p>
-                      <p className="text-[10px] font-bold text-slate-900">${item.cost_per_kg}</p>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <p className="text-[8px] text-slate-400 uppercase font-black">/M2</p>
-                      <p className="text-[10px] font-bold text-slate-900">${item.cost_per_m2}</p>
-                    </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
 
-              {tab === "regions" && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Country Code</span>
-                    <span className="text-slate-700 font-bold tracking-widest bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{item.country_code}</span>
-                  </div>
-                  {item.image_url && (
-                    <img src={item.image_url} alt="" className="w-full h-24 object-cover rounded-xl mt-2 border border-slate-100" referrerPolicy="no-referrer" />
-                  )}
-                </>
-              )}
+                {tab === "channels" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Type</span>
+                      <span className="text-slate-700 font-bold capitalize bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-lg">{item.type}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Topic</span>
+                      <span className="text-slate-700 font-mono text-[10px] truncate max-w-[140px]">{item.topic}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Status</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
+                        item.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                  </>
+                )}
 
-              {tab === "providers" && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Type</span>
-                    <span className="text-slate-700 font-semibold capitalize">{item.type}</span>
-                  </div>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400 uppercase font-bold tracking-widest">Status</span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-bold uppercase border border-emerald-100">
-                      {item.status}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
-               <button className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1 hover:underline">
-                 View Node <ChevronRight className={`h-3 w-3 ${isRtl ? 'rotate-180' : ''}`} />
-               </button>
-               {item.is_active !== undefined && (
-                 <div className={`h-2 w-2 rounded-full ${item.is_active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-slate-300'}`} />
-               )}
-            </div>
-          </div>
-        ))}
+                {tab === "roles" && (
+                  <>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(item.permissions || []).slice(0, 3).map((p: string, i: number) => (
+                        <span key={i} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-mono">{p}</span>
+                      ))}
+                      {(item.permissions || []).length > 3 && (
+                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-500 rounded text-[9px] font-bold">+{(item.permissions || []).length - 3}</span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
     );
   };
@@ -827,6 +993,27 @@ export default function Admin() {
   const renderTable = (tab: string, items: any) => {
     if (!Array.isArray(items)) return <div className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">No data available for this node</div>;
     
+    if (tab === "orders") {
+      return (
+        <OrderList 
+          orders={items} 
+          role="admin" 
+          providers={metadata.providers} 
+          onAssign={async (orderId, providerId) => {
+            const token = localStorage.getItem("token");
+            await fetch("/api/assign-order", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({ orderId, providerId })
+            });
+            fetchData();
+          }}
+        />
+      );
+    }
     return (
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-sm">
         <div className="px-5 py-4 md:px-6 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
@@ -890,6 +1077,8 @@ export default function Admin() {
                 {tab === "providers" && (
                   <>
                     <th className="px-5 py-4 font-bold tracking-widest">Provider Label</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Type</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Contact</th>
                     <th className="px-5 py-4 font-bold tracking-widest">Status</th>
                   </>
                 )}
@@ -900,6 +1089,22 @@ export default function Admin() {
                     <th className="px-5 py-4 font-bold tracking-widest">Route</th>
                     <th className="px-5 py-4 font-bold tracking-widest">Method</th>
                     <th className="px-5 py-4 font-bold tracking-widest">Status</th>
+                  </>
+                )}
+
+                {tab === "channels" && (
+                  <>
+                    <th className="px-5 py-4 font-bold tracking-widest">Channel Name</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Type</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Topic</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Status</th>
+                  </>
+                )}
+
+                {tab === "roles" && (
+                  <>
+                    <th className="px-5 py-4 font-bold tracking-widest">Role Name</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Permissions Count</th>
                   </>
                 )}
 
@@ -998,11 +1203,20 @@ export default function Admin() {
 
                   {tab === "providers" && (
                     <>
-                      <td className="px-5 py-5 font-bold text-slate-900">
-                        {lang === 'ar' && item.metas?.['ar:title'] ? item.metas['ar:title'] : item.name}
+                      <td className="px-5 py-5">
+                        <div className="font-bold text-slate-900">{lang === 'ar' && item.metas?.['ar:title'] ? item.metas['ar:title'] : item.name}</div>
+                        <div className="text-[10px] text-slate-400">{item.email}</div>
                       </td>
                       <td className="px-5 py-5">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase border border-emerald-100">
+                         <span className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-tight">{item.type}</span>
+                      </td>
+                      <td className="px-5 py-5 text-slate-500 font-medium">
+                        {item.phone}
+                      </td>
+                      <td className="px-5 py-5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                          item.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'
+                        }`}>
                           {item.status}
                         </span>
                       </td>
@@ -1026,6 +1240,34 @@ export default function Admin() {
                           }`}>
                             {item.is_active ? 'Eligible' : 'Suspended'}
                           </span>
+                      </td>
+                    </>
+                  )}
+
+                  {tab === "channels" && (
+                    <>
+                      <td className="px-5 py-5 font-bold text-slate-900">{item.name}</td>
+                      <td className="px-5 py-5">
+                         <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-tight">{item.type}</span>
+                      </td>
+                      <td className="px-5 py-5 font-mono text-[10px] text-slate-400">{item.topic}</td>
+                      <td className="px-5 py-5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                          item.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </>
+                  )}
+
+                  {tab === "roles" && (
+                    <>
+                      <td className="px-5 py-5 font-bold text-slate-900 capitalize">{item.name}</td>
+                      <td className="px-5 py-5">
+                         <span className="px-2 py-1 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">
+                           {Array.isArray(item.permissions) ? item.permissions.length : 0} Actions Defined
+                         </span>
                       </td>
                     </>
                   )}
@@ -1104,142 +1346,103 @@ export default function Admin() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full bg-[#F1F5F9] min-h-screen">
-      {/* Sidebar - Desktop */}
-      <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-100 mb-6">
-          <div className="flex items-center gap-2 text-blue-600 mb-1">
-             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg">
-                <ShieldCheck className="h-5 w-5" />
-             </div>
-             <h2 className="font-bold tracking-tighter text-xl text-slate-900">SHIPADMIN</h2>
-          </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Control Center</p>
+    <div className="flex-1 w-full flex flex-col bg-[#F1F5F9] min-h-screen" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Page Header */}
+      <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title={t('dashboard')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div className="h-4 w-[1px] bg-slate-200 mx-2 hidden sm:block"></div>
+          <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">{t('admin_panel')}</h1>
         </div>
-        
-        <nav className="flex-1 px-4 space-y-1">
-          {mainNavItems.map(item => {
-            const Icon = item.icon;
-            return (
-              <button 
-                key={item.id}
-                onClick={() => setActiveTab(item.id as MainTab)}
-                className={`w-full relative flex items-center gap-3 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest cursor-pointer transition-all ${activeTab === item.id ? "bg-slate-900 text-white shadow-lg shadow-slate-200" : "text-slate-500 hover:bg-slate-50"}`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 mt-auto">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-            <div className="flex items-center gap-3 mb-3">
-               <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-[10px]">AD</div>
-               <div>
-                 <p className="text-[10px] font-black text-slate-900">Admin Console</p>
-                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Active Node 01</p>
-               </div>
-            </div>
-            <button onClick={handleLogout} className="w-full py-2.5 bg-white border border-red-100 hover:bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-              <LogOut className="h-3 w-3" /> Sign Out
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+           <button 
+             onClick={() => setLanguage(lang === 'ar' ? 'en' : 'ar')} 
+             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+             title={lang === 'ar' ? 'English' : 'العربية'}
+           >
+              <Globe className="h-5 w-5" />
+           </button>
+           <button 
+             onClick={handleLogout}
+             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+             title={t('logout')}
+           >
+             <LogOut className="h-5 w-5" />
+           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* Mobile Menu Overlay */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-               <h2 className="font-black text-slate-900 text-lg tracking-tighter">SHIPADMIN</h2>
-              <button onClick={() => setIsMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <nav className="p-4 space-y-2">
-               {mainNavItems.map(item => {
-                const Icon = item.icon;
-                return (
-                  <button 
-                    key={item.id}
-                    onClick={() => { setActiveTab(item.id as MainTab); setIsMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${activeTab === item.id ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="mt-auto p-6 bg-slate-50 border-t border-slate-100">
-               <button onClick={handleLogout} className="flex items-center justify-center gap-2 w-full py-4 bg-white text-red-600 border border-red-100 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm">
-                <LogOut className="h-5 w-5" /> Sign Out
-              </button>
-            </div>
+      <main className="flex-1 flex flex-col p-4 md:p-8 overflow-auto">
+        <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
+          {/* Main Tabs Selection */}
+          <div className="flex flex-wrap gap-2 md:gap-4 p-1 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden shrink-0">
+             {mainNavItems.filter(item => item.tab).map((item) => (
+               <button
+                 key={item.id}
+                 onClick={() => setActiveTab(item.tab as MainTab)}
+                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === item.tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
+               >
+                 {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
+                 <span className="hidden sm:inline">{item.label}</span>
+               </button>
+             ))}
           </div>
-        </div>
-      )}
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-20">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMenuOpen(true)} className="md:hidden p-2 text-slate-600 hover:bg-slate-50 rounded-lg">
-              <Menu className="h-6 w-6" />
-            </button>
-            <div className="flex items-center gap-3">
-               <span className="text-slate-900 font-black text-xs uppercase tracking-[0.2em]">{t(activeTab as any)}</span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase flex items-center gap-3">
+                {activeTab === "delivery" ? (
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-8 w-8 text-blue-600" />
+                    <span>{deliveryNavItems.find(i => i.id === deliveryTab)?.label || 'Delivery'}</span>
+                  </div>
+                ) : (
+                  <>
+                    {mainNavItems.find(i => i.tab === activeTab)?.icon && React.createElement(mainNavItems.find(i => i.tab === activeTab)!.icon, { className: "h-8 w-8 text-blue-600" })}
+                    <span>{mainNavItems.find(i => i.tab === activeTab)?.label}</span>
+                  </>
+                )}
+              </h2>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-[0.2em] mt-1">Management Node Active</p>
+            </div>
+            
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
                {activeTab === "delivery" && (
-                 <>
-                   <ChevronRight className={`h-3 w-3 text-slate-300 ${isRtl ? 'rotate-180' : ''}`} />
-                   <span className="text-blue-600 font-black text-xs uppercase tracking-[0.2em]">{t(deliveryTab as any)}</span>
-                 </>
+                 <div className="flex bg-white p-1 rounded-xl border border-slate-200">
+                    {deliveryNavItems.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => setDeliveryTab(item.id as DeliverySubTab)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap ${deliveryTab === item.id ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        <item.icon className="h-3 w-3" />
+                        <span className="hidden sm:inline">{item.label}</span>
+                      </button>
+                    ))}
+                 </div>
+               )}
+
+               {activeTab !== "analytics" && activeTab !== "settings" && (
+                  <div className="flex items-center bg-slate-100 p-1 rounded-lg">
+                    <button onClick={() => setViewMode("table")} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === "table" ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Table</button>
+                    <button onClick={() => setViewMode("cards")} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === "cards" ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Cards</button>
+                  </div>
+               )}
+
+               {activeTab !== "analytics" && activeTab !== "settings" && (
+                 <button 
+                   onClick={() => handleOpenModal()}
+                   className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-100 whitespace-nowrap"
+                 >
+                   <Plus className="h-4 w-4" /> {t('add_new') || 'Add New'}
+                 </button>
                )}
             </div>
-            
-            {/* View Toggle */}
-            {activeTab !== "analytics" && activeTab !== "settings" && (
-              <div className="hidden sm:flex items-center bg-slate-100 p-1 rounded-lg">
-                <button onClick={() => setViewMode("table")} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === "table" ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Table</button>
-                <button onClick={() => setViewMode("cards")} className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${viewMode === "cards" ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Cards</button>
-              </div>
-            )}
           </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setLanguage(lang === 'ar' ? 'en' : 'ar')} 
-              className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-              title={lang === 'ar' ? 'English' : 'العربية'}
-            >
-               <Globe className="h-5 w-5" />
-            </button>
-             <Link to="/" className="p-2 text-slate-400 hover:text-slate-900 transition-colors">
-               <ExternalLink className="h-5 w-5" />
-             </Link>
-          </div>
-        </header>
 
-        <section className="p-4 md:p-8 flex-1 overflow-auto">
-          <div className="max-w-6xl mx-auto flex flex-col gap-6">
-            
-            {activeTab === "delivery" && (
-              <div className="flex flex-wrap gap-2 mb-2 p-1 bg-white border border-slate-200 rounded-2xl shadow-sm w-fit">
-                {deliveryNavItems.map(subItem => (
-                  <button
-                    key={subItem.id}
-                    onClick={() => setDeliveryTab(subItem.id as DeliverySubTab)}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${deliveryTab === subItem.id ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
-                  >
-                    {subItem.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
+          <div className="flex-1 min-h-0">
             {loading ? (
                <div className="flex items-center justify-center h-64">
                  <div className="flex flex-col items-center gap-3">
@@ -1252,39 +1455,14 @@ export default function Admin() {
                 {activeTab === "analytics" && renderAnalytics()}
                 {activeTab === "users" && data && (viewMode === "table" ? renderTable("users", data) : renderCards("users", data))}
                 {activeTab === "orders" && data && (viewMode === "table" ? renderTable("orders", data) : renderCards("orders", data))}
-                {activeTab === "delivery" && data && (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex justify-end">
-                      <button 
-                        onClick={() => handleOpenModal()}
-                        className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-blue-600 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2"
-                      >
-                        <Plus className="h-4 w-4" /> <span>{t('add_new')} {t(deliveryTab as any)}</span>
-                      </button>
-                    </div>
-                    {viewMode === "table" ? renderTable(deliveryTab, data) : renderCards(deliveryTab, data)}
-                    {deliveryTab === "matrix" && (
-                       <button 
-                        onClick={() => handleOpenModal()}
-                        className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all text-xs font-black uppercase tracking-widest"
-                       >
-                         + Configure New Route Association
-                       </button>
-                    )}
-                  </div>
-                )}
+                {activeTab === "channels" && data && (viewMode === "table" ? renderTable("channels", data) : renderCards("channels", data))}
+                {activeTab === "roles" && data && (viewMode === "table" ? renderTable("roles", data) : renderCards("roles", data))}
+                {activeTab === "delivery" && data && (viewMode === "table" ? renderTable(deliveryTab, data) : renderCards(deliveryTab, data))}
                 {activeTab === "settings" && renderSettings()}
               </>
             )}
-
-            <div className="flex justify-between items-center px-4 mt-4">
-               <Link to="/" className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors">
-                 <ArrowLeft className="h-4 w-4" /> Return to Root
-               </Link>
-               <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">SECURE_ADMIN_INSTANCE_404</p>
-            </div>
           </div>
-        </section>
+        </div>
         {renderModal()}
       </main>
     </div>

@@ -1,9 +1,16 @@
-import { ArrowRight, Truck, LogIn, Shield, Globe } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowRight, Truck, LogIn, Shield, Globe, User } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "../lib/i18n";
 
 export default function Landing() {
   const { t, lang, setLanguage, isRtl } = useTranslation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    setIsAuthenticated(!!token);
+  }, []);
 
   return (
     <div className={`relative w-full h-screen overflow-hidden bg-slate-950 ${isRtl ? 'font-sans' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
@@ -42,17 +49,28 @@ export default function Landing() {
               <Globe className="h-3.5 w-3.5 md:h-4 md:w-4" />
               <span className="hidden xs:inline">{lang === 'ar' ? 'English' : 'العربية'}</span>
             </button>
+            {isAuthenticated && (
+              <Link to="/profile/general" className="text-xs font-bold text-slate-300 hover:text-white uppercase tracking-widest transition-colors hidden sm:block">
+                {t('profile_page') || 'Profile'}
+              </Link>
+            )}
             <Link to="/admin" className="text-xs font-bold text-slate-300 hover:text-white uppercase tracking-widest transition-colors hidden sm:block">
               {t('analytics')}
             </Link>
             <Link to="/order" className="text-xs font-bold text-white uppercase tracking-widest hover:text-blue-400 transition-colors hidden lg:block">
               {t('get_started')}
             </Link>
-            <Link to="/login" className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-full border border-white/20 bg-white/5 backdrop-blur-md text-white text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95 shadow-xl shrink-0">
-              <LogIn className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('enterprise_login')}</span>
-              <span className="sm:hidden">{lang === 'ar' ? 'دخول' : 'Login'}</span>
-            </Link>
+            {isAuthenticated ? (
+              <Link to="/profile/general" className="flex items-center justify-center h-10 w-10 md:h-12 md:w-12 rounded-full border border-blue-500 bg-blue-600/20 backdrop-blur-md text-white hover:bg-blue-600/30 transition-all active:scale-95 shadow-xl shrink-0">
+                <User className="h-5 w-5 md:h-6 md:w-6" />
+              </Link>
+            ) : (
+              <Link to="/login" className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-full border border-white/20 bg-white/5 backdrop-blur-md text-white text-[10px] md:text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95 shadow-xl shrink-0">
+                <LogIn className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('enterprise_login')}</span>
+                <span className="sm:hidden">{lang === 'ar' ? 'دخول' : 'Login'}</span>
+              </Link>
+            )}
           </nav>
         </div>
       </header>
@@ -78,18 +96,12 @@ export default function Landing() {
               : 'Automate your global distribution with our multi-strategy route matrix. Real-time provider assignment for every shipment, every coordinate.'}
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
+          <div className="flex items-center justify-center w-full">
             <Link 
               to="/order" 
               className={`group w-full sm:w-auto px-10 py-5 bg-blue-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 active:scale-[0.98] flex items-center justify-center gap-3`}
             >
-              {t('get_started')} <ArrowRight className={`h-5 w-5 group-hover:translate-x-1 transition-transform ${isRtl ? 'rotate-180 group-hover:-translate-x-1' : ''}`} />
-            </Link>
-            <Link 
-              to="/login" 
-              className="w-full sm:w-auto px-10 py-5 bg-transparent border border-white/20 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:bg-white/5 transition-all text-center"
-            >
-              {t('enterprise_login')}
+              {lang === 'ar' ? 'إنشاء شحنة' : 'CREATE SHIPMENT'} <ArrowRight className={`h-5 w-5 group-hover:translate-x-1 transition-transform ${isRtl ? 'rotate-180 group-hover:-translate-x-1' : ''}`} />
             </Link>
           </div>
 
