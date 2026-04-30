@@ -114,7 +114,8 @@ export const translations = {
     provider_settings: "إعدادات المزود",
     business_settings: "إعدادات العمل",
     channels: "القنوات",
-    roles: "الأدوار"
+    roles: "الأدوار",
+    automation: "الأتمتة"
   },
   en: {
     dashboard: "Dashboard",
@@ -230,7 +231,8 @@ export const translations = {
     provider_settings: "Provider Settings",
     business_settings: "Business Settings",
     channels: "Channels",
-    roles: "Roles"
+    roles: "Roles",
+    automation: "Automation"
   }
 };
 

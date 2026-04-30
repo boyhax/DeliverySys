@@ -13,7 +13,7 @@ export default function Login() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
-      navigate(next === "/" ? "/dashboard" : next);
+      navigate(next === "/" ? "/profile" : next);
     }
   }, [navigate, next]);
 
@@ -49,7 +49,7 @@ export default function Login() {
               <Home className="h-5 w-5" />
             </Link>
             <Link to="/" className="flex items-center gap-2 text-blue-600 mb-1">
-               <h2 className="font-bold tracking-tight text-xl text-slate-900">ShipControl</h2>
+               <h2 className="font-bold tracking-tight text-xl text-slate-900">Logistics Engine</h2>
             </Link>
           </div>
           <nav className="flex items-center gap-4">
@@ -134,30 +134,38 @@ export default function Login() {
 
           {/* Demo Helpers */}
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-center mb-4">Demo Accounts</p>
+            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-center mb-4">Seeded Oman Demo Accounts</p>
             <div className="grid grid-cols-1 gap-2">
               <button 
-                onClick={() => { setEmail("admin@admin.com"); setPassword("admin"); }}
+                onClick={() => { setEmail("admin@ship.om"); setPassword("password123"); }}
                 className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
               >
-                <span>Admin</span>
-                <span className="text-[10px] font-medium opacity-60">admin@admin.com</span>
+                <span>Admin (All access)</span>
+                <span className="text-[10px] font-medium opacity-60">admin@ship.om</span>
               </button>
               <button 
-                onClick={() => { setEmail("user@admin.com"); setPassword("user"); }}
+                onClick={() => { setEmail("manager@ship.om"); setPassword("password123"); }}
                 className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
               >
-                <span>User</span>
-                <span className="text-[10px] font-medium opacity-60">user@admin.com</span>
+                <span>Manager (Ops)</span>
+                <span className="text-[10px] font-medium opacity-60">manager@ship.om</span>
               </button>
               <button 
-                onClick={() => { setEmail("provider@admin.com"); setPassword("provider"); }}
+                onClick={() => { setEmail("customer@ship.om"); setPassword("password123"); }}
                 className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
               >
-                <span>Provider</span>
-                <span className="text-[10px] font-medium opacity-60">provider@admin.com</span>
+                <span>User (Customer)</span>
+                <span className="text-[10px] font-medium opacity-60">customer@ship.om</span>
+              </button>
+              <button 
+                onClick={() => { setEmail("provider@ship.om"); setPassword("password123"); }}
+                className="w-full py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg transition-all border border-slate-200 flex items-center justify-between"
+              >
+                <span>Provider (Cargo)</span>
+                <span className="text-[10px] font-medium opacity-60">provider@ship.om</span>
               </button>
             </div>
+            <p className="text-[9px] text-slate-400 text-center mt-4 font-medium italic">Demo Password: password123</p>
           </div>
         </div>
       </div>

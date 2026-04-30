@@ -9,126 +9,292 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
 
 const JWT_SECRET = process.env.JWT_SECRET || "ship-control-secret-key-2026";
+const IS_DEV = process.env.NODE_ENV !== "production";
 
-// Initialize in-memory SQLite database
-const db = new Database(":memory:");
+// Initialize database (file-based for dev persistence, though we reset it)
+const db = new Database(IS_DEV ? "dev.db" : ":memory:");
 
-// Enhanced Schema with Assignments
-db.exec(`
-  CREATE TABLE roles (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE,
-    description TEXT
-  );
+function initSchema() {
+  db.exec(`
+    DROP TABLE IF EXISTS channel_subscriptions;
+    DROP TABLE IF EXISTS channels;
+    DROP TABLE IF EXISTS orders;
+    DROP TABLE IF EXISTS provider_assignments;
+    DROP TABLE IF EXISTS shipping_providers;
+    DROP TABLE IF EXISTS shipping_classes;
+    DROP TABLE IF EXISTS shipping_automations;
+    DROP TABLE IF EXISTS shipping_matrix;
+    DROP TABLE IF EXISTS shipping_regions;
+    DROP TABLE IF EXISTS shipping_methods;
+    DROP TABLE IF EXISTS user_roles;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS role_permissions;
+    DROP TABLE IF EXISTS roles;
 
-  CREATE TABLE role_permissions (
-    id TEXT PRIMARY KEY,
-    role_id TEXT,
-    permission TEXT,
-    conditions TEXT,
-    FOREIGN KEY(role_id) REFERENCES roles(id)
-  );
+    CREATE TABLE roles (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE,
+      description TEXT
+    );
 
-  CREATE TABLE users (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    email TEXT UNIQUE,
-    password TEXT,
-    status TEXT
-  );
+    CREATE TABLE role_permissions (
+      id TEXT PRIMARY KEY,
+      role_id TEXT,
+      permission TEXT,
+      conditions TEXT,
+      FOREIGN KEY(role_id) REFERENCES roles(id)
+    );
 
-  CREATE TABLE user_roles (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    role_id TEXT,
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(role_id) REFERENCES roles(id)
-  );
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT UNIQUE,
+      password TEXT,
+      status TEXT
+    );
 
-  CREATE TABLE shipping_methods (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    type TEXT, -- 'air', 'sea', 'land'
-    base_cost REAL,
-    status TEXT
-  );
+    CREATE TABLE user_roles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      role_id TEXT,
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      FOREIGN KEY(role_id) REFERENCES roles(id)
+    );
 
-  CREATE TABLE shipping_regions (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    country_code TEXT,
-    metas TEXT -- JSON string for translations, etc.
-  );
+    CREATE TABLE shipping_methods (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      type TEXT, -- 'air', 'sea', 'land'
+      base_cost REAL,
+      status TEXT
+    );
 
-  CREATE TABLE shipping_matrix (
-    id TEXT PRIMARY KEY,
-    from_region_id TEXT,
-    to_region_id TEXT,
-    method_id TEXT,
-    cost_multiplier REAL,
-    estimated_days INTEGER,
-    FOREIGN KEY(from_region_id) REFERENCES shipping_regions(id),
-    FOREIGN KEY(to_region_id) REFERENCES shipping_regions(id),
-    FOREIGN KEY(method_id) REFERENCES shipping_methods(id)
-  );
+    CREATE TABLE shipping_regions (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      country_code TEXT,
+      metas TEXT -- JSON string for translations, etc.
+    );
 
-  CREATE TABLE shipping_classes (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    description TEXT,
-    weight_limit REAL,
-    size_limit REAL
-  );
+    CREATE TABLE shipping_matrix (
+      id TEXT PRIMARY KEY,
+      from_region_id TEXT,
+      to_region_id TEXT,
+      method_id TEXT,
+      cost_multiplier REAL,
+      estimated_days INTEGER,
+      FOREIGN KEY(from_region_id) REFERENCES shipping_regions(id),
+      FOREIGN KEY(to_region_id) REFERENCES shipping_regions(id),
+      FOREIGN KEY(method_id) REFERENCES shipping_methods(id)
+    );
 
-  CREATE TABLE shipping_providers (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    type TEXT, -- 'freelancer', 'company', 'hired driver'
-    phone TEXT,
-    email TEXT,
-    performance_score REAL,
-    status TEXT
-  );
+    CREATE TABLE shipping_classes (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      description TEXT,
+      weight_limit REAL,
+      size_limit REAL
+    );
 
-  CREATE TABLE provider_assignments (
-    id TEXT PRIMARY KEY,
-    provider_id TEXT,
-    method_id TEXT,
-    FOREIGN KEY(provider_id) REFERENCES shipping_providers(id),
-    FOREIGN KEY(method_id) REFERENCES shipping_methods(id)
-  );
+    CREATE TABLE shipping_providers (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      type TEXT, -- 'freelancer', 'company', 'hired driver'
+      phone TEXT,
+      email TEXT,
+      performance_score REAL,
+      status TEXT
+    );
 
-  CREATE TABLE orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT,
-    from_region_id TEXT,
-    to_region_id TEXT,
-    method_id TEXT,
-    provider_id TEXT, -- User ID of the actual provider
-    status TEXT,
-    total_cost REAL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+    CREATE TABLE provider_assignments (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT,
+      method_id TEXT,
+      FOREIGN KEY(provider_id) REFERENCES shipping_providers(id),
+      FOREIGN KEY(method_id) REFERENCES shipping_methods(id)
+    );
 
-  CREATE TABLE channels (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    topic TEXT,
-    type TEXT, -- 'sms', 'email', 'fcm', 'chat'
-    status TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+    CREATE TABLE orders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      from_region_id TEXT,
+      to_region_id TEXT,
+      method_id TEXT,
+      provider_id TEXT, 
+      status TEXT,
+      total_cost REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
 
-  CREATE TABLE channel_subscriptions (
-    id TEXT PRIMARY KEY,
-    channel_id TEXT,
-    user_id TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(channel_id) REFERENCES channels(id),
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
+    CREATE TABLE channels (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      topic TEXT,
+      type TEXT, -- 'sms', 'email', 'fcm', 'chat'
+      status TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE channel_subscriptions (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT,
+      user_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(channel_id) REFERENCES channels(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE shipping_automations (
+      id TEXT PRIMARY KEY,
+      matrix_id TEXT,
+      assignment_type TEXT, -- 'auto', 'nomination'
+      nomination_type TEXT, -- 'bulk', 'one-by-one'
+      time_window INTEGER, -- in minutes
+      nomination_logic TEXT, -- 'distance', 'shuffle', 'order'
+      status TEXT, -- 'active', 'inactive'
+      FOREIGN KEY(matrix_id) REFERENCES shipping_matrix(id)
+    );
+  `);
+}
+
+function seedData() {
+  const adminId = uuidv4();
+  const managerId = uuidv4();
+  const customerId = uuidv4();
+  const providerId = "provider-stable-id-123";
+
+  const roleAdminId = uuidv4();
+  const roleManagerId = uuidv4();
+  const roleUserId = uuidv4();
+  const roleProviderId = uuidv4();
+
+  const hashedPw = bcrypt.hashSync("password123", 10);
+
+  // 1. Roles & Permissions
+  db.exec(`
+    INSERT INTO roles (id, name, description) VALUES
+      ('${roleAdminId}', 'admin', 'System Administrator'),
+      ('${roleManagerId}', 'manager', 'Operations Manager'),
+      ('${roleUserId}', 'user', 'Standard Customer'),
+      ('${roleProviderId}', 'provider', 'Logistics Provider');
+
+    INSERT INTO role_permissions (id, role_id, permission, conditions) VALUES
+      ('${uuidv4()}', '${roleAdminId}', '*:*', null),
+      ('${uuidv4()}', '${roleManagerId}', 'orders:read', null),
+      ('${uuidv4()}', '${roleManagerId}', 'orders:write', null),
+      ('${uuidv4()}', '${roleManagerId}', 'analytics:read', null),
+      ('${uuidv4()}', '${roleUserId}', 'orders:read', '{"user_id": "$user_id"}'),
+      ('${uuidv4()}', '${roleUserId}', 'orders:create', null),
+      ('${uuidv4()}', '${roleProviderId}', 'orders:read', '{"provider_id": "$user_id"}'),
+      ('${uuidv4()}', '${roleProviderId}', 'orders:update_status', null);
+  `);
+
+  // 2. Users (Oman Seeds)
+  db.exec(`
+    INSERT INTO users (id, name, email, password, status) VALUES
+      ('${adminId}', 'Oman Admin', 'admin@ship.om', '${hashedPw}', 'active'),
+      ('${managerId}', 'Muscat Hub Manager', 'manager@ship.om', '${hashedPw}', 'active'),
+      ('${customerId}', 'Salim Al-Said', 'customer@ship.om', '${hashedPw}', 'active'),
+      ('${providerId}', 'Musandam Express', 'provider@ship.om', '${hashedPw}', 'active');
+
+    INSERT INTO user_roles (id, user_id, role_id) VALUES
+      ('${uuidv4()}', '${adminId}', '${roleAdminId}'),
+      ('${uuidv4()}', '${managerId}', '${roleManagerId}'),
+      ('${uuidv4()}', '${customerId}', '${roleUserId}'),
+      ('${uuidv4()}', '${providerId}', '${roleProviderId}');
+  `);
+
+  // 3. Oman Regions (Cities)
+  const cities = [
+    { name: 'Muscat', ar: 'مسقط' },
+    { name: 'Salalah', ar: 'صلالة' },
+    { name: 'Sohar', ar: 'صحار' },
+    { name: 'Nizwa', ar: 'نزوى' },
+    { name: 'Sur', ar: 'صور' },
+    { name: 'Ibri', ar: 'عبري' },
+    { name: 'Buraimi', ar: 'البريمي' },
+    { name: 'Khasab', ar: 'خصب' },
+    { name: 'Duqm', ar: 'الدقم' },
+    { name: 'Rustaq', ar: 'الرستاق' }
+  ];
+
+  const regionIds: Record<string, string> = {};
+  cities.forEach(city => {
+    const id = uuidv4();
+    regionIds[city.name] = id;
+    db.prepare(`INSERT INTO shipping_regions (id, name, country_code, metas) VALUES (?, ?, 'OM', ?)`).run(
+      id, city.name, JSON.stringify({ "ar": city.ar })
+    );
+  });
+
+  // 4. Shipping Methods
+  const landStandardId = uuidv4();
+  const landExpressId = uuidv4();
+  const bikeId = uuidv4();
+  const heavyId = uuidv4();
+
+  db.exec(`
+    INSERT INTO shipping_methods (id, name, type, base_cost, status) VALUES 
+      ('${landStandardId}', 'Standard Land', 'land', 2.5, 'active'),
+      ('${landExpressId}', 'Express Land', 'land', 5.0, 'active'),
+      ('${bikeId}', 'Bike Delivery (Intra-city)', 'land', 1.5, 'active'),
+      ('${heavyId}', 'Heavy Cargo', 'land', 15.0, 'active');
+  `);
+
+  // 5. Shipping Matrix (Routes)
+  const routes = [
+    { from: 'Muscat', to: 'Salalah', method: landStandardId, multiplier: 1.5, days: 2 },
+    { from: 'Muscat', to: 'Sohar', method: landExpressId, multiplier: 1.1, days: 1 },
+    { from: 'Muscat', to: 'Nizwa', method: bikeId, multiplier: 1.0, days: 1 },
+    { from: 'Muscat', to: 'Sur', method: landStandardId, multiplier: 1.2, days: 1 },
+    { from: 'Sohar', to: 'Buraimi', method: landExpressId, multiplier: 1.0, days: 1 },
+    { from: 'Salalah', to: 'Duqm', method: heavyId, multiplier: 2.0, days: 3 }
+  ];
+
+  const matrixIds: string[] = [];
+  routes.forEach(r => {
+    const id = uuidv4();
+    matrixIds.push(id);
+    db.prepare(`
+      INSERT INTO shipping_matrix (id, from_region_id, to_region_id, method_id, cost_multiplier, estimated_days) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, regionIds[r.from], regionIds[r.to], r.method, r.multiplier, r.days);
+  });
+
+  // 6. Automation Rules
+  db.prepare(`
+    INSERT INTO shipping_automations (id, matrix_id, assignment_type, nomination_type, time_window, nomination_logic, status)
+    VALUES (?, ?, 'auto', 'bulk', 30, 'distance', 'active')
+  `).run(uuidv4(), matrixIds[0]);
+
+  // 7. Providers & Eligibility
+  const p1 = uuidv4();
+  const p2 = uuidv4();
+  db.exec(`
+    INSERT INTO shipping_providers (id, name, type, phone, email, performance_score, status) VALUES
+      ('${p1}', 'Oman Logistics Group', 'company', '+96812345678', 'ops@omanlog.om', 4.8, 'active'),
+      ('${p2}', 'Muscat Fast Biker', 'freelancer', '+96887654321', 'biker@muscat.om', 4.5, 'active');
+
+    INSERT INTO provider_assignments (id, provider_id, method_id) VALUES
+      ('${uuidv4()}', '${p1}', '${landStandardId}'),
+      ('${uuidv4()}', '${p1}', '${heavyId}'),
+      ('${uuidv4()}', '${p2}', '${bikeId}');
+  `);
+
+  // 8. Orders
+  db.prepare(`
+    INSERT INTO orders (id, user_id, from_region_id, to_region_id, method_id, provider_id, status, total_cost)
+    VALUES (?, ?, ?, ?, ?, ?, 'in_transit', 12.5)
+  `).run(uuidv4(), customerId, regionIds['Muscat'], regionIds['Sohar'], landExpressId, providerId);
+}
+
+// Initialize Schema and Seed
+initSchema();
+if (IS_DEV) {
+  console.log("Development mode: Seeding database...");
+  seedData();
+}
 
 async function startServer() {
   const app = express();
@@ -166,62 +332,6 @@ async function startServer() {
       client.send(JSON.stringify({ type: "alert", ...alert }));
     }
   };
-
-  // Insert seed data
-  const regionAId = uuidv4();
-  const regionBId = uuidv4();
-  const classId = uuidv4();
-  const methodId = uuidv4();
-  const roleAdminId = uuidv4();
-  const roleManagerId = uuidv4();
-  const roleUserId = uuidv4();
-  const roleProviderId = uuidv4();
-
-  const adminHashed = bcrypt.hashSync("admin", 10);
-  const userHashed = bcrypt.hashSync("user", 10);
-  const providerHashed = bcrypt.hashSync("provider", 10);
-
-  const adminId = uuidv4();
-  const userId = uuidv4();
-  const userProviderId = "provider-stable-id-123";
-
-  db.exec(`
-    INSERT INTO roles (id, name, description) VALUES
-      ('${roleAdminId}', 'admin', 'System Administrator'),
-      ('${roleManagerId}', 'manager', 'Operations Manager'),
-      ('${roleUserId}', 'user', 'Standard User'),
-      ('${roleProviderId}', 'provider', 'Shipping Provider');
-
-    INSERT INTO role_permissions (id, role_id, permission, conditions) VALUES
-      ('${uuidv4()}', '${roleAdminId}', '*:*', null),
-      ('${uuidv4()}', '${roleManagerId}', 'orders:read', null),
-      ('${uuidv4()}', '${roleManagerId}', 'orders:write', '{"cost": {"$lt": 1000}}'),
-      ('${uuidv4()}', '${roleUserId}', 'orders:read', '{"user_id": "$user_id"}'),
-      ('${uuidv4()}', '${roleProviderId}', 'orders:read', '{"provider_id": "$user_id"}');
-
-    INSERT INTO users (id, name, email, password, status) VALUES
-      ('${adminId}', 'Admin User', 'admin@admin.com', '${adminHashed}', 'active'),
-      ('${userId}', 'Regular User', 'user@admin.com', '${userHashed}', 'active'),
-      ('${userProviderId}', 'Fast Delivery Co', 'provider@admin.com', '${providerHashed}', 'active');
-
-    INSERT INTO user_roles (id, user_id, role_id) VALUES
-      ('${uuidv4()}', '${adminId}', '${roleAdminId}'),
-      ('${uuidv4()}', '${userId}', '${roleUserId}'),
-      ('${uuidv4()}', '${userProviderId}', '${roleProviderId}');
-
-    INSERT INTO shipping_regions (id, name, country_code, metas) VALUES 
-      ('${regionAId}', 'Muscat', 'OM', '{"ar:title": "مسقط"}'),
-      ('${regionBId}', 'Dubai', 'AE', '{"ar:title": "دبي"}');
-
-    INSERT INTO shipping_methods (id, name, type, base_cost, status) VALUES 
-      ('${methodId}', 'Express Air', 'air', 50.0, 'active');
-
-    INSERT INTO shipping_matrix (id, from_region_id, to_region_id, method_id, cost_multiplier, estimated_days) VALUES
-      ('${uuidv4()}', '${regionAId}', '${regionBId}', '${methodId}', 1.2, 2);
-
-    INSERT INTO shipping_classes (id, name, description, weight_limit, size_limit) VALUES
-      ('${classId}', 'Standard Box', 'Up to 5kg', 5.0, 0.5);
-  `);
 
   app.use(express.json());
 
@@ -308,7 +418,7 @@ async function startServer() {
         WHERE u.id = ?
       `).get(req.user.id);
 
-     let orders;
+     let orders: any[] = [];
      if (user.role === 'provider') {
        orders = db.prepare(`
          SELECT o.*, r1.name as from_region_name, r2.name as to_region_name 
@@ -336,7 +446,7 @@ async function startServer() {
      res.json(orders);
   });
 
-  app.post("/api/orders", authorize("orders:write"), (req: any, res) => {
+  app.post("/api/orders", authorize("orders:create"), (req: any, res) => {
     const { fromRegionId, toRegionId, methodId, totalCost } = req.body;
     const orderId = uuidv4();
     db.prepare(`
@@ -358,6 +468,50 @@ async function startServer() {
       order
     });
     
+    res.json({ success: true });
+  });
+
+  app.post("/api/calculate-shipping", (req, res) => {
+    const { fromRegionId, toRegionId, weight, sizeM2 } = req.body;
+    
+    const routes = db.prepare(`
+      SELECT m.*, sm.id as method_id, sm.name as method_name, sm.base_cost
+      FROM shipping_matrix m
+      JOIN shipping_methods sm ON m.method_id = sm.id
+      WHERE m.from_region_id = ? AND m.to_region_id = ?
+    `).all(fromRegionId, toRegionId);
+
+    const quotes = routes.map((route: any) => {
+      const baseCost = route.base_cost || 50;
+      const multiplier = route.cost_multiplier || 1;
+      const total = (baseCost + (weight * 2) + (sizeM2 * 10)) * multiplier;
+      
+      return {
+        method: { id: route.method_id, name: route.method_name },
+        matrix: { 
+          id: route.id, 
+          estimated_days: route.estimated_days,
+          from_region_id: route.from_region_id,
+          to_region_id: route.to_region_id
+        },
+        total
+      };
+    });
+
+    res.json(quotes);
+  });
+
+  app.patch("/api/orders/:id/status", authorize("orders:update_status"), (req: any, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    db.prepare("UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, id);
+    res.json({ success: true });
+  });
+
+  app.put("/api/orders/:id/status", authorize("orders:update_status"), (req: any, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    db.prepare("UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(status, id);
     res.json({ success: true });
   });
 
@@ -383,7 +537,7 @@ async function startServer() {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       const user: any = db.prepare(`
-        SELECT u.id, u.name, u.email, u.status, r.name as role 
+        SELECT u.id, u.name, u.email, u.status, r.id as roleId, r.name as role 
         FROM users u
         LEFT JOIN user_roles ur ON u.id = ur.user_id
         LEFT JOIN roles r ON ur.role_id = r.id
@@ -391,14 +545,20 @@ async function startServer() {
       `).get(decoded.id);
       
       if (!user) return res.status(404).json({ error: "User not found" });
-      res.json(user);
+
+      const permissions = db.prepare(`
+        SELECT permission, conditions FROM role_permissions
+        WHERE role_id = ?
+      `).all(user.roleId);
+
+      res.json({ ...user, permissions });
     } catch (e) {
       res.status(401).json({ error: "Invalid token" });
     }
   });
 
   // Admin API Routes
-  app.get("/api/admin/analytics", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/analytics", authorize("analytics:read"), (req, res) => {
     const totalRevenue = db.prepare("SELECT SUM(total_cost) as total FROM orders").get() as any;
     const orderCount = db.prepare("SELECT COUNT(*) as count FROM orders").get() as any;
     const activeUsers = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
@@ -415,7 +575,7 @@ async function startServer() {
     });
   });
 
-  app.get("/api/admin/users", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/users", authorize("users:read"), (req, res) => {
     const users = db.prepare(`
       SELECT u.id, u.name, u.email, u.status, r.name as role 
       FROM users u
@@ -425,17 +585,17 @@ async function startServer() {
     res.json(users);
   });
 
-  app.get("/api/admin/methods", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/methods", authorize("methods:read"), (req, res) => {
     const methods = db.prepare("SELECT * FROM shipping_methods").all();
     res.json(methods);
   });
 
-  app.get("/api/admin/regions", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/regions", authorize("regions:read"), (req, res) => {
     const regions = db.prepare("SELECT * FROM shipping_regions").all();
     res.json(regions.map((r: any) => ({ ...r, metas: JSON.parse(r.metas || '{}') })));
   });
 
-  app.get("/api/admin/matrix", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/matrix", authorize("matrix:read"), (req, res) => {
     const matrix = db.prepare(`
       SELECT m.*, r1.name as from_region_name, r2.name as to_region_name, sm.name as method_name
       FROM shipping_matrix m
@@ -446,19 +606,31 @@ async function startServer() {
     res.json(matrix);
   });
 
-  app.get("/api/admin/providers", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/providers", authorize("providers:read"), (req, res) => {
     const providers = db.prepare("SELECT * FROM shipping_providers").all();
     res.json(providers);
   });
 
-  app.get("/api/admin/roles", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/roles", authorize("roles:read"), (req, res) => {
     const roles = db.prepare("SELECT * FROM roles").all();
     res.json(roles);
   });
 
-  app.get("/api/admin/channels", authorize("*:*"), (req, res) => {
+  app.get("/api/admin/channels", authorize("channels:read"), (req, res) => {
     const channels = db.prepare("SELECT * FROM channels").all();
     res.json(channels);
+  });
+
+  app.get("/api/admin/automations", authorize("matrix:read"), (req, res) => {
+    const automations = db.prepare(`
+      SELECT sa.*, r1.name as from_region_name, r2.name as to_region_name, sm.name as method_name
+      FROM shipping_automations sa
+      JOIN shipping_matrix m ON sa.matrix_id = m.id
+      JOIN shipping_regions r1 ON m.from_region_id = r1.id
+      JOIN shipping_regions r2 ON m.to_region_id = r2.id
+      JOIN shipping_methods sm ON m.method_id = sm.id
+    `).all();
+    res.json(automations);
   });
 
   app.get("/api/admin/subscriptions", authorize("*:*"), (req, res) => {
@@ -527,7 +699,8 @@ async function startServer() {
       'providers': 'shipping_providers',
       'users': 'users',
       'channels': 'channels',
-      'subscriptions': 'channel_subscriptions'
+      'subscriptions': 'channel_subscriptions',
+      'automations': 'shipping_automations'
     };
     const table = tableMap[type];
     if (!table) return res.status(404).json({ error: "Unknown type" });
@@ -555,7 +728,8 @@ async function startServer() {
       'users': 'users',
       'eligibility': 'provider_assignments',
       'channels': 'channels',
-      'subscriptions': 'channel_subscriptions'
+      'subscriptions': 'channel_subscriptions',
+      'automations': 'shipping_automations'
     };
     const table = tableMap[type];
     if (!table) return res.status(404).json({ error: "Unknown type" });
@@ -609,7 +783,8 @@ async function startServer() {
       'providers': 'shipping_providers',
       'users': 'users',
       'orders': 'orders',
-      'channels': 'channels'
+      'channels': 'channels',
+      'automations': 'shipping_automations'
     };
     const table = tableMap[type];
     if (!table) return res.status(404).json({ error: "Unknown type" });
@@ -624,6 +799,16 @@ async function startServer() {
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // Global Error Handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("Global Error Handler:", err);
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: err.message || "An unexpected error occurred",
+      path: req.path
+    });
   });
 
   // Vite middleware

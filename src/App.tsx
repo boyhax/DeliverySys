@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import OrderFlow from "./pages/OrderFlow";
-import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Profile from "./pages/Profile";
 
@@ -15,7 +14,6 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/order" element={<OrderFlow />} />
-          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile/*" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>

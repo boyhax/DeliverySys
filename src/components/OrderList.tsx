@@ -14,13 +14,14 @@ interface Order {
 
 interface OrderListProps {
   orders: Order[];
-  role: 'user' | 'admin' | 'provider';
+  canAssign?: boolean;
+  canUpdateStatus?: boolean;
   providers?: any[];
   onAssign?: (orderId: string, providerId: string) => void;
-  onStatusUpdate?: (orderId: string, status: string) => void; // Fixed name mismatch
+  onStatusUpdate?: (orderId: string, status: string) => void;
 }
 
-export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatusUpdate }: OrderListProps) => {
+export const OrderList = ({ orders = [], canAssign, canUpdateStatus, providers = [], onAssign, onStatusUpdate }: OrderListProps) => {
   const { t } = useTranslation();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -114,7 +115,7 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                     <span className="px-2 py-0.5 bg-blue-50 rounded text-[9px] font-bold text-blue-600">{order.to_region_name}</span>
                   </div>
                 </div>
-                <div className="col-span-1 text-xs font-black text-slate-700">${order.total_cost}</div>
+                <div className="col-span-1 text-xs font-black text-slate-700">${(order.total_cost || 0).toFixed(2)}</div>
                 <div className="col-span-1">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tight border ${getStatusStyle(order.status)}`}>
                     {getStatusIcon(order.status)}
@@ -122,7 +123,7 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                   </span>
                 </div>
                 <div className="col-span-1 text-right">
-                  {role === 'admin' && (
+                  {canAssign && (
                     <select 
                       className="text-[10px] font-black p-2 bg-slate-100 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
                       value={order.provider_id || ''}
@@ -134,7 +135,7 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                       ))}
                     </select>
                   )}
-                  {role === 'provider' && order.status !== 'delivered' && (
+                  {canUpdateStatus && order.status !== 'delivered' && (
                     <select 
                       className="text-[10px] font-black p-2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg outline-none"
                       value={order.status}
@@ -145,7 +146,7 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                       <option value="delivered">Delivered</option>
                     </select>
                   )}
-                  {role === 'user' && (
+                  {!canAssign && !canUpdateStatus && (
                     <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all">
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
@@ -173,12 +174,12 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Value</p>
-                    <p className="text-xs font-black text-blue-600">${order.total_cost}</p>
+                    <p className="text-xs font-black text-blue-600">${(order.total_cost || 0).toFixed(2)}</p>
                   </div>
                 </div>
 
                 <div className="flex gap-2">
-                  {role === 'admin' && (
+                  {canAssign && (
                     <select 
                       className="flex-1 text-[10px] font-black p-3 bg-slate-100 rounded-xl outline-none"
                       value={order.provider_id || ''}
@@ -190,7 +191,7 @@ export const OrderList = ({ orders = [], role, providers = [], onAssign, onStatu
                       ))}
                     </select>
                   )}
-                  {role === 'provider' && order.status !== 'delivered' && (
+                  {canUpdateStatus && order.status !== 'delivered' && (
                     <select 
                       className="flex-1 text-[10px] font-black p-3 bg-indigo-600 text-white rounded-xl outline-none"
                       value={order.status}

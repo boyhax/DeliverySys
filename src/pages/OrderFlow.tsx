@@ -176,11 +176,11 @@ export default function OrderFlow() {
       {/* Header */}
       <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title={t('dashboard')}>
+          <Link to={localStorage.getItem("token") ? "/profile" : "/"} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Back">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="h-4 w-[1px] bg-slate-200 mx-2 hidden sm:block"></div>
-          <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">ShipControl</h1>
+          <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">{t('create_shipment') || 'Booking'}</h1>
         </div>
         <div className="flex items-center gap-2">
            <button 

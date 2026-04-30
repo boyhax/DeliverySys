@@ -36,7 +36,7 @@ export default function Landing() {
               <Truck className="h-5 w-5 md:h-6 md:w-6" />
             </div>
             <div className={`flex flex-col ${isRtl ? 'items-end ml-1 md:ml-2' : ''}`}>
-              <span className="font-black tracking-tighter text-lg md:text-2xl text-white leading-none">SHIPCONTROL</span>
+              <span className="font-black tracking-tighter text-lg md:text-2xl text-white leading-none">LOGISTICS</span>
               <span className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.3em] font-bold text-blue-400">Logistics Engine</span>
             </div>
           </Link>
@@ -50,7 +50,7 @@ export default function Landing() {
               <span className="hidden xs:inline">{lang === 'ar' ? 'English' : 'العربية'}</span>
             </button>
             {isAuthenticated && (
-              <Link to="/profile/general" className="text-xs font-bold text-slate-300 hover:text-white uppercase tracking-widest transition-colors hidden sm:block">
+              <Link to="/profile" className="text-xs font-bold text-slate-300 hover:text-white uppercase tracking-widest transition-colors hidden sm:block">
                 {t('profile_page') || 'Profile'}
               </Link>
             )}

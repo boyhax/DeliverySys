@@ -14,9 +14,10 @@ import {
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import { useTranslation, Language } from "../lib/i18n";
+import { hasPermission, Permission } from "../lib/permissions";
 
 type MainTab = "analytics" | "users" | "orders" | "delivery" | "channels" | "roles" | "settings";
-type DeliverySubTab = "methods" | "regions" | "matrix" | "providers" | "eligibility";
+type DeliverySubTab = "methods" | "regions" | "matrix" | "providers" | "eligibility" | "automations";
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function Admin() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table"); // Table by default for desktop, we'll use a responsive default in useEffect
   const [deliveryTab, setDeliveryTab] = useState<DeliverySubTab>("methods");
   const [data, setData] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -33,6 +35,25 @@ export default function Admin() {
   const [formData, setFormData] = useState<any>({});
   const [metadata, setMetadata] = useState<any>({});
   const [currentStep, setCurrentStep] = useState(1);
+
+  const mainNavItems = [
+    { id: "profile", label: t('profile_page'), icon: User, link: "/profile" },
+    { id: "analytics", label: t('analytics'), icon: BarChart3, tab: "analytics", permission: 'analytics:read' as Permission },
+    { id: "users", label: t('users'), icon: UsersIcon, tab: "users", permission: 'users:read' as Permission },
+    { id: "delivery", label: t('delivery'), icon: Truck, tab: "delivery", permission: 'methods:read' as Permission },
+    { id: "channels", label: t('channels') || 'Channels', icon: MessageSquare, tab: "channels", permission: 'channels:read' as Permission },
+    { id: "roles", label: t('roles') || 'Roles', icon: Shield, tab: "roles", permission: 'roles:read' as Permission },
+    { id: "settings", label: t('settings'), icon: Settings, tab: "settings", permission: '*:*' as Permission },
+  ].filter(item => !item.permission || hasPermission(profile?.permissions, item.permission));
+
+  useEffect(() => {
+    if (profile && !mainNavItems.find(i => i.tab === activeTab)) {
+      const firstTab = mainNavItems.find(i => i.tab);
+      if (firstTab && firstTab.tab) {
+        setActiveTab(firstTab.tab as MainTab);
+      }
+    }
+  }, [profile, mainNavItems, activeTab]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -46,6 +67,7 @@ export default function Admin() {
     } else {
       setLoading(false);
     }
+    fetchProfile();
     // Set default view mode based on screen size
     if (window.innerWidth < 768) {
       setViewMode("cards");
@@ -57,24 +79,59 @@ export default function Admin() {
     const fetchMetadata = async () => {
       const token = localStorage.getItem("token");
       const headers = { "Authorization": `Bearer ${token}` };
+      
+      const safeFetch = async (url: string, h?: any) => {
+        try {
+          const r = await fetch(url, { headers: h });
+          if (!r.ok) return [];
+          const ct = r.headers.get("content-type");
+          if (ct && ct.includes("application/json")) {
+            return await r.json();
+          }
+          return [];
+        } catch (e) {
+          console.error(`Safe fetch failed for ${url}:`, e);
+          return [];
+        }
+      };
+
       try {
-        const [methods, regions, matrix, providers, classes, roles, users, channels] = await Promise.all([
-          fetch("/api/admin/methods", { headers }).then(r => r.json()),
-          fetch("/api/admin/regions", { headers }).then(r => r.json()),
-          fetch("/api/admin/matrix", { headers }).then(r => r.json()),
-          fetch("/api/admin/providers", { headers }).then(r => r.json()),
-          fetch("/api/classes").then(r => r.json()),
-          fetch("/api/admin/roles", { headers }).then(r => r.json()),
-          fetch("/api/admin/users", { headers }).then(r => r.json()),
-          fetch("/api/admin/channels", { headers }).then(r => r.json()),
+        const [methods, regions, matrix, providers, classes, roles, users, channels, automations] = await Promise.all([
+          safeFetch("/api/admin/methods", headers),
+          safeFetch("/api/admin/regions", headers),
+          safeFetch("/api/admin/matrix", headers),
+          safeFetch("/api/admin/providers", headers),
+          safeFetch("/api/classes"),
+          safeFetch("/api/admin/roles", headers),
+          safeFetch("/api/admin/users", headers),
+          safeFetch("/api/admin/channels", headers),
+          safeFetch("/api/admin/automations", headers),
         ]);
-        setMetadata({ methods, regions, matrix, providers, classes, roles, users, channels });
+        setMetadata({ methods, regions, matrix, providers, classes, roles, users, channels, automations });
       } catch (err) {
         console.error("Metadata fetch error:", err);
       }
     };
     if (isModalOpen || activeTab === 'channels') fetchMetadata();
   }, [isModalOpen, activeTab]);
+
+  const fetchProfile = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/me", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data);
+      } else if (res.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -84,6 +141,10 @@ export default function Admin() {
       const endpoint = activeTab === "delivery" ? deliveryTab : activeTab;
       const res = await fetch(`/api/admin/${endpoint}`, { headers });
       if (!res.ok) {
+        if (res.status === 401) {
+           localStorage.removeItem("token");
+           navigate("/login");
+        }
         throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
       }
       const contentType = res.headers.get("content-type");
@@ -113,7 +174,7 @@ export default function Admin() {
   };
 
   const getStepsForType = (t: string) => {
-    if (t === "methods" || t === "matrix" || t === "users" || t === "orders" || t === "regions" || t === "providers" || t === "channels" || t === "roles") return 2;
+    if (t === "methods" || t === "matrix" || t === "users" || t === "orders" || t === "regions" || t === "providers" || t === "channels" || t === "roles" || t === "automations") return 2;
     return 1;
   };
 
@@ -179,21 +240,11 @@ export default function Admin() {
     navigate("/");
   };
 
-  const mainNavItems = [
-    { id: "dashboard", label: t('orders'), icon: Package, link: "/dashboard" },
-    { id: "profile", label: t('profile_page'), icon: User, link: "/profile" },
-    { id: "analytics", label: t('analytics'), icon: BarChart3, tab: "analytics" },
-    { id: "users", label: t('users'), icon: UsersIcon, tab: "users" },
-    { id: "delivery", label: t('delivery'), icon: Truck, tab: "delivery" },
-    { id: "channels", label: t('channels') || 'Channels', icon: MessageSquare, tab: "channels" },
-    { id: "roles", label: t('roles') || 'Roles', icon: Shield, tab: "roles" },
-    { id: "settings", label: t('settings'), icon: Settings, tab: "settings" },
-  ];
-
   const deliveryNavItems = [
     { id: "methods", label: t('methods'), icon: Layers },
     { id: "regions", label: t('regions'), icon: Globe },
     { id: "matrix", label: t('matrix'), icon: Activity },
+    { id: "automations", label: t('automation' as any) || 'Automation', icon: Activity },
     { id: "providers", label: t('providers'), icon: ShieldCheck },
     { id: "eligibility", label: t('eligibility'), icon: ShieldCheck },
   ];
@@ -469,6 +520,70 @@ export default function Admin() {
                       <div className="space-y-1">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">M2 Override</label>
                         <input type="number" step="0.01" value={formData.cost_per_m2_override || ''} onChange={e => setFormData({...formData, cost_per_m2_override: e.target.value ? parseFloat(e.target.value) : null})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="Default" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Automations Form */}
+            {type === "automations" && (
+              <>
+                {currentStep === 1 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Matrix Route</label>
+                      <select required value={formData.matrix_id || ''} onChange={e => setFormData({...formData, matrix_id: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                        <option value="">Select Route to Automate</option>
+                        {metadata.matrix?.map((m: any) => (
+                          <option key={m.id} value={m.id}>
+                            {m.from_region_name} → {m.to_region_name} ({m.method_name})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Automation rules are tied to specific region/method routes</p>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</label>
+                      <select required value={formData.status || ''} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {currentStep === 2 && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assignment Type</label>
+                        <select required value={formData.assignment_type || ''} onChange={e => setFormData({...formData, assignment_type: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="auto">Auto Assign</option>
+                          <option value="nomination">By Nomination</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Nomination Mode</label>
+                        <select required value={formData.nomination_type || ''} onChange={e => setFormData({...formData, nomination_type: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="bulk">Bulk Request</option>
+                          <option value="one-by-one">One-by-One</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Time Window (Min)</label>
+                        <input type="number" required value={formData.time_window || ''} onChange={e => setFormData({...formData, time_window: parseInt(e.target.value)})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold" placeholder="e.g. 15" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selection Logic</label>
+                        <select required value={formData.nomination_logic || ''} onChange={e => setFormData({...formData, nomination_logic: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                          <option value="distance">Closer Distance</option>
+                          <option value="shuffle">Random Shuffle</option>
+                          <option value="order">By Performance</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -825,6 +940,9 @@ export default function Admin() {
     );
   };
 
+  const canUpdateFleet = hasPermission(profile?.permissions, 'orders:update_status');
+  const canAssignOrders = hasPermission(profile?.permissions, 'orders:write');
+
   const renderCards = (tab: string, items: any) => {
     if (!Array.isArray(items)) return <div className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">No data available for this node</div>;
     
@@ -832,7 +950,8 @@ export default function Admin() {
       return (
         <OrderList 
           orders={items} 
-          role="admin" 
+          canAssign={canAssignOrders}
+          canUpdateStatus={canUpdateFleet}
           providers={metadata.providers} 
           onAssign={async (orderId, providerId) => {
             const token = localStorage.getItem("token");
@@ -860,13 +979,14 @@ export default function Admin() {
                        tab === "providers" ? <ShieldCheck className="h-5 w-5" /> :
                        tab === "channels" ? <MessageSquare className="h-5 w-5" /> :
                        tab === "roles" ? <Shield className="h-5 w-5" /> :
+                       tab === "automations" ? <Activity className="h-5 w-5" /> :
                        <Activity className="h-5 w-5" />;
 
           return (
             <Card 
               key={idx}
               title={title}
-              subtitle={`#${item.id.substring(0, 8)}`}
+              subtitle={tab === "automations" ? `${item.from_region_name} → ${item.to_region_name}` : `#${item.id.substring(0, 8)}`}
               icon={tab === "methods" && item.metas?.image ? <img src={item.metas.image} alt="" className="h-10 w-10 rounded-xl object-cover border border-slate-100" referrerPolicy="no-referrer" /> : icon}
               headerAction={
                 <div className="flex items-center gap-1">
@@ -880,6 +1000,27 @@ export default function Admin() {
               }
             >
               <div className="space-y-3">
+                {tab === "automations" && (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Method</span>
+                      <span className="text-slate-700 font-semibold">{item.method_name}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Mode</span>
+                      <span className="text-blue-600 font-bold uppercase tracking-tighter bg-blue-50 px-1.5 py-0.5 rounded">{item.assignment_type}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Logic</span>
+                      <span className="text-slate-700 font-semibold capitalize">{item.nomination_logic}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400 uppercase font-bold tracking-widest">Time Window</span>
+                      <span className="text-slate-700 font-bold">{item.time_window} Min</span>
+                    </div>
+                  </>
+                )}
+
                 {tab === "users" && (
                   <>
                     <div className="flex justify-between text-[11px]">
@@ -902,15 +1043,15 @@ export default function Admin() {
                     <div className="grid grid-cols-3 gap-2 pt-2">
                       <div className="bg-slate-50 p-2 rounded-lg text-center">
                         <p className="text-[8px] text-slate-400 uppercase font-black">Base</p>
-                        <p className="text-[10px] font-bold text-slate-900">${item.base_cost}</p>
+                        <p className="text-[10px] font-bold text-slate-900">${(item.base_cost || 0).toFixed(2)}</p>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-lg text-center">
                         <p className="text-[8px] text-slate-400 uppercase font-black">/KG</p>
-                        <p className="text-[10px] font-bold text-slate-900">${item.cost_per_kg}</p>
+                        <p className="text-[10px] font-bold text-slate-900">${(item.cost_per_kg || 0).toFixed(2)}</p>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-lg text-center">
                         <p className="text-[8px] text-slate-400 uppercase font-black">/M2</p>
-                        <p className="text-[10px] font-bold text-slate-900">${item.cost_per_m2}</p>
+                        <p className="text-[10px] font-bold text-slate-900">${(item.cost_per_m2 || 0).toFixed(2)}</p>
                       </div>
                     </div>
                   </>
@@ -997,7 +1138,8 @@ export default function Admin() {
       return (
         <OrderList 
           orders={items} 
-          role="admin" 
+          canAssign={canAssignOrders}
+          canUpdateStatus={canUpdateFleet}
           providers={metadata.providers} 
           onAssign={async (orderId, providerId) => {
             const token = localStorage.getItem("token");
@@ -1105,6 +1247,16 @@ export default function Admin() {
                   <>
                     <th className="px-5 py-4 font-bold tracking-widest">Role Name</th>
                     <th className="px-5 py-4 font-bold tracking-widest">Permissions Count</th>
+                  </>
+                )}
+
+                {tab === "automations" && (
+                  <>
+                    <th className="px-5 py-4 font-bold tracking-widest">Managed Route</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Type</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Logic</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Window</th>
+                    <th className="px-5 py-4 font-bold tracking-widest">Status</th>
                   </>
                 )}
 
@@ -1272,6 +1424,30 @@ export default function Admin() {
                     </>
                   )}
 
+                  {tab === "automations" && (
+                    <>
+                      <td className="px-5 py-5">
+                        <div className="font-bold text-slate-900">{item.from_region_name} → {item.to_region_name}</div>
+                        <div className="text-[10px] text-slate-400 font-medium">{item.method_name}</div>
+                      </td>
+                      <td className="px-5 py-5">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-blue-600 font-black text-[10px] uppercase">{item.assignment_type}</span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase">{item.nomination_type}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-5 font-bold text-slate-600 capitalize">{item.nomination_logic}</td>
+                      <td className="px-5 py-5 text-slate-900 font-black">{item.time_window}M</td>
+                      <td className="px-5 py-5">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                          item.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </>
+                  )}
+
                   <td className="px-5 py-5 text-right">
                     <div className="flex items-center justify-end gap-3">
                       <button 
@@ -1350,20 +1526,13 @@ export default function Admin() {
       {/* Page Header */}
       <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-8 flex items-center justify-between shrink-0 sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title={t('dashboard')}>
+          <Link to="/" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Home">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="h-4 w-[1px] bg-slate-200 mx-2 hidden sm:block"></div>
           <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none uppercase">{t('admin_panel')}</h1>
         </div>
         <div className="flex items-center gap-2">
-           <button 
-             onClick={() => setLanguage(lang === 'ar' ? 'en' : 'ar')} 
-             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-             title={lang === 'ar' ? 'English' : 'العربية'}
-           >
-              <Globe className="h-5 w-5" />
-           </button>
            <button 
              onClick={handleLogout}
              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
