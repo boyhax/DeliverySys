@@ -34,10 +34,10 @@ export default function Dashboard() {
   }, [navigate]);
 
   const fetchProfile = async () => {
-    const email = localStorage.getItem("email");
+    const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/me", {
-        headers: { "x-user-email": email || "facegoogl@gmail.com" }
+        headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
       setProfile(data);
@@ -72,13 +72,13 @@ export default function Dashboard() {
   };
 
   const submitBatch = async () => {
-    const email = localStorage.getItem("email");
+    const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/admin/orders/bulk", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-user-email": email || "facegoogl@gmail.com"
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ orders: bulkBatch })
       });
@@ -124,7 +124,7 @@ export default function Dashboard() {
         <div className="p-4 mt-auto">
           <div className="bg-slate-900 rounded-xl p-4 text-white">
             <p className="text-xs text-slate-400 mb-1">{t('current_session') || 'Current Session'}</p>
-            <p className="text-sm font-medium">{profile?.name || 'User'}</p>
+            <p className="text-sm font-medium">{profile?.name || t('user_label')}</p>
             <button onClick={handleLogout} className="mt-3 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs transition-colors flex items-center justify-center gap-2">
               <LogOut className="h-4 w-4" /> {t('logout')}
             </button>
@@ -138,7 +138,7 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}></div>
           <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col">
             <div className={`p-6 border-b border-slate-100 flex justify-between items-center ${isRtl ? 'flex-row-reverse' : ''}`}>
-              <h2 className="font-bold text-slate-900 text-lg">Menu</h2>
+              <h2 className="font-bold text-slate-900 text-lg">{t('menu')}</h2>
               <button onClick={() => setIsMenuOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50">
                 <X className="h-5 w-5" />
               </button>
@@ -154,10 +154,10 @@ export default function Dashboard() {
             <div className="mt-auto p-6 border-t border-slate-100 bg-slate-50">
                <div className={`flex items-center gap-3 mb-4 ${isRtl ? 'flex-row-reverse text-right' : ''}`}>
                  <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
-                   {profile?.name?.[0].toUpperCase() || 'U'}
+                   {profile?.name?.[0].toUpperCase() || t('user_label')[0].toUpperCase()}
                  </div>
                  <div>
-                   <p className="text-sm font-bold text-slate-900">{profile?.name}</p>
+                   <p className="text-sm font-bold text-slate-900">{profile?.name || t('user_label')}</p>
                    <p className="text-xs text-slate-500 uppercase tracking-tighter">{profile?.role}</p>
                  </div>
                </div>
@@ -187,12 +187,6 @@ export default function Dashboard() {
                title={lang === 'ar' ? 'English' : 'العربية'}
              >
                <Globe className="h-5 w-5" />
-             </button>
-             <button 
-               onClick={() => setShowBulkModal(true)}
-               className="px-4 py-2 text-xs md:text-sm font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2"
-             >
-               <Package className="h-4 w-4" /> {t('bulk_shipments')}
              </button>
              <Link to="/order" className="px-4 py-2 text-xs md:text-sm font-bold text-white bg-blue-600 rounded-lg shadow-sm shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
               + {t('add_new')} <span className="hidden sm:inline">{t('orders')}</span>

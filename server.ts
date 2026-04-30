@@ -3,6 +3,10 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+
+const JWT_SECRET = process.env.JWT_SECRET || "ship-control-secret-key-2026";
 
 // Initialize in-memory SQLite database
 const db = new Database(":memory:");
@@ -109,6 +113,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT,
     email TEXT UNIQUE,
+    password TEXT,
     status TEXT
   );
 
@@ -148,37 +153,42 @@ db.exec(`
   );
 `);
 
-// Insert some seed data
-const regionAId = uuidv4();
-const regionBId = uuidv4();
-const classId = uuidv4();
-const methodId = uuidv4();
-const providerId = uuidv4();
-const matrixId = uuidv4();
+  // Insert some seed data
+  const regionAId = uuidv4();
+  const regionBId = uuidv4();
+  const classId = uuidv4();
+  const methodId = uuidv4();
+  const providerId = uuidv4();
+  const matrixId = uuidv4();
 
-  const adminId = uuidv4();
-  const managerId = uuidv4();
   const roleAdminId = uuidv4();
   const roleManagerId = uuidv4();
+  const roleUserId = uuidv4();
+
+  const adminHashed = bcrypt.hashSync("admin", 10);
+  const userHashed = bcrypt.hashSync("user", 10);
+  const adminId = uuidv4();
+  const userId = uuidv4();
 
   db.exec(`
     INSERT INTO roles (id, name, description) VALUES
       ('${roleAdminId}', 'admin', 'Global Administrator'),
-      ('${roleManagerId}', 'manager', 'Operations Manager');
+      ('${roleManagerId}', 'manager', 'Operations Manager'),
+      ('${roleUserId}', 'user', 'Standard User');
 
     INSERT INTO role_permissions (id, role_id, permission, conditions) VALUES
       ('${uuidv4()}', '${roleAdminId}', '*:*', null),
       ('${uuidv4()}', '${roleManagerId}', 'orders:read', null),
-      ('${uuidv4()}', '${roleManagerId}', 'orders:write', '{"cost": {"$lt": 1000}}'), -- Can only write orders under 1000
-      ('${uuidv4()}', '${roleManagerId}', 'analytics:read', null);
+      ('${uuidv4()}', '${roleManagerId}', 'orders:write', '{"cost": {"$lt": 1000}}'),
+      ('${uuidv4()}', '${roleUserId}', 'orders:read', '{"user_id": "$user_id"}');
 
-    INSERT INTO users (id, name, email, status) VALUES
-      ('${adminId}', 'Admin User', 'facegoogl@gmail.com', 'active'),
-      ('${managerId}', 'Jane Smith', 'jane@example.com', 'active');
+    INSERT INTO users (id, name, email, password, status) VALUES
+      ('${adminId}', 'Admin User', 'admin@admin.com', '${adminHashed}', 'active'),
+      ('${userId}', 'Regular User', 'user@admin.com', '${userHashed}', 'active');
 
     INSERT INTO user_roles (id, user_id, role_id) VALUES
       ('${uuidv4()}', '${adminId}', '${roleAdminId}'),
-      ('${uuidv4()}', '${managerId}', '${roleManagerId}');
+      ('${uuidv4()}', '${userId}', '${roleUserId}');
 
     INSERT INTO shipping_regions (id, name, country_code, metas) VALUES 
       ('${regionAId}', 'Muscat', 'OM', '{"ar:title": "مسقط"}'),
@@ -259,43 +269,55 @@ async function startServer() {
     }
   };
 
-  const getUserPermissions = (userEmail: string) => {
-    const user: any = db.prepare("SELECT * FROM users WHERE email = ?").get(userEmail);
-    if (!user) return [];
-
+  const checkPermission = (user: any, requiredPermission: string, resourceData?: any) => {
     const permissions = db.prepare(`
       SELECT rp.permission, rp.conditions
       FROM role_permissions rp
       JOIN user_roles ur ON rp.role_id = ur.role_id
       WHERE ur.user_id = ?
-    `).all(user.id);
-
-    return permissions as { permission: string; conditions: string }[];
-  };
-
-  const checkPermission = (userEmail: string, requiredPermission: string, resourceData?: any) => {
-    const userPermissions = getUserPermissions(userEmail);
+    `).all(user.id) as { permission: string; conditions: string }[];
     
-    // Super-access logic or matching permission
-    const matches = userPermissions.filter(p => p.permission === requiredPermission || p.permission === '*:*');
+    const matches = permissions.filter(p => p.permission === requiredPermission || p.permission === '*:*');
     
     if (matches.length === 0) return false;
 
-    // If any role allows it with conditions, evaluate them
-    return matches.some(p => evaluateAttributeRule(p.conditions, resourceData || {}));
+    // Inject user context into conditions if needed
+    const context = { ...resourceData, user_id: user.id };
+    
+    return matches.some(p => {
+       let conditions = p.conditions;
+       if (conditions) {
+         // Replace $user_id with actual ID
+         conditions = conditions.replace(/\$user_id/g, user.id);
+       }
+       return evaluateAttributeRule(conditions, context);
+    });
   };
 
   // Middleware
   const authorize = (permission: string) => (req: any, res: any, next: any) => {
-    const userEmail = req.headers['x-user-email']; // Mock identity for this demo
-    if (!userEmail) return res.status(401).json({ error: "Identity required" });
-
-    // For write operations, we might need to fetch the existing resource to check attributes
-    // This is a simplified implementation
-    if (!checkPermission(userEmail, permission, req.body)) {
-      return res.status(403).json({ error: `Forbidden: Missing ${permission}` });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing or invalid authorization header" });
     }
-    next();
+
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(decoded.id) as any;
+      
+      if (!user) return res.status(401).json({ error: "User no longer exists" });
+      
+      req.user = user;
+
+      if (!checkPermission(user, permission, req.body)) {
+        console.log(`[Auth] Permission denied for ${user.email} on ${permission}`);
+        return res.status(403).json({ error: `Forbidden: Missing ${permission}` });
+      }
+      next();
+    } catch (e) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
   };
 
   // --- API Routes ---
@@ -354,25 +376,39 @@ async function startServer() {
   });
   
   app.post("/api/login", (req, res) => {
-    const { email } = req.body;
-    // Mock login
-    res.json({ token: uuidv4(), user: { email, name: email.split("@")[0] } });
+    const { email, password } = req.body;
+    const user: any = db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?)").get(email);
+    
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
   });
 
   app.get("/api/me", (req, res) => {
-    const userEmail = req.headers['x-user-email']; // Mock identity for this demo
-    if (!userEmail) return res.status(401).json({ error: "Identity required" });
-    
-    const user: any = db.prepare(`
-      SELECT u.*, r.name as role 
-      FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id
-      LEFT JOIN roles r ON ur.role_id = r.id
-      WHERE u.email = ?
-    `).get(userEmail);
-    
-    if (!user) return res.status(404).json({ error: "User not found" });
-    res.json(user);
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const user: any = db.prepare(`
+        SELECT u.id, u.name, u.email, u.status, r.name as role 
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE u.id = ?
+      `).get(decoded.id);
+      
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json(user);
+    } catch (e) {
+      res.status(401).json({ error: "Invalid token" });
+    }
   });
 
   // --- Admin API Routes ---

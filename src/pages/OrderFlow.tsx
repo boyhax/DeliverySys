@@ -122,12 +122,16 @@ export default function OrderFlow() {
   const handleCalculate = async () => {
     if (!isFormValid()) return;
     setLoadingQuotes(true);
+    const token = localStorage.getItem("token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     try {
       // Calculate quotes for each destination and sum them up
       const results = await Promise.all(destinations.map(async (dest) => {
         const res = await fetch("/api/calculate-shipping", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               fromRegionId,
               toRegionId: dest.regionId,

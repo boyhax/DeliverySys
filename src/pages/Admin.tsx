@@ -53,8 +53,8 @@ export default function Admin() {
   // Fetch metadata for forms
   useEffect(() => {
     const fetchMetadata = async () => {
-      const email = localStorage.getItem("userEmail") || "facegoogl@gmail.com";
-      const headers = { "x-user-email": email };
+      const token = localStorage.getItem("token");
+      const headers = { "Authorization": `Bearer ${token}` };
       try {
         const [methods, regions, matrix, providers, classes] = await Promise.all([
           fetch("/api/admin/methods", { headers }).then(r => r.json()),
@@ -73,8 +73,8 @@ export default function Admin() {
 
   const fetchData = async () => {
     setLoading(true);
-    const email = localStorage.getItem("userEmail") || "facegoogl@gmail.com";
-    const headers = { "x-user-email": email };
+    const token = localStorage.getItem("token");
+    const headers = { "Authorization": `Bearer ${token}` };
     try {
       const endpoint = activeTab === "delivery" ? deliveryTab : activeTab;
       const res = await fetch(`/api/admin/${endpoint}`, { headers });
@@ -129,14 +129,14 @@ export default function Admin() {
 
     const url = editingItem ? `/api/admin/${type}/${editingItem.id}` : `/api/admin/${type}`;
     const method = editingItem ? "PUT" : "POST";
-    const email = localStorage.getItem("userEmail") || "facegoogl@gmail.com";
+    const token = localStorage.getItem("token");
 
     try {
       const res = await fetch(url, {
         method,
         headers: { 
           "Content-Type": "application/json",
-          "x-user-email": email 
+          "Authorization": `Bearer ${token}` 
         },
         body: JSON.stringify(formData)
       });
@@ -152,11 +152,11 @@ export default function Admin() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
     const type = activeTab === "delivery" ? deliveryTab : activeTab;
-    const email = localStorage.getItem("userEmail") || "facegoogl@gmail.com";
+    const token = localStorage.getItem("token");
     try {
       const res = await fetch(`/api/admin/${type}/${id}`, { 
         method: "DELETE",
-        headers: { "x-user-email": email }
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) fetchData();
     } catch (err) {

@@ -102,7 +102,9 @@ export const translations = {
     remove_destination: "إزالة الوجهة",
     user_profile: "ملف المستخدم",
     business_panel: "لوحة الأعمال",
-    current_session: "الجلسة الحالية"
+    current_session: "الجلسة الحالية",
+    menu: "القائمة",
+    user_label: "مستخدم"
   },
   en: {
     dashboard: "Dashboard",
@@ -206,7 +208,9 @@ export const translations = {
     remove_destination: "Remove Destination",
     user_profile: "User Profile",
     business_panel: "Business Panel",
-    current_session: "Current Session"
+    current_session: "Current Session",
+    menu: "Menu",
+    user_label: "User"
   }
 };
 
